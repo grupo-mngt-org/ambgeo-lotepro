@@ -1,0 +1,66 @@
+Para transformar seu código em um software profissional que realmente substitua um estudo de viabilidade, o prompt precisa ser mais técnico, estruturado e detalhado. Você precisa descrever não apenas o "o quê", mas o "como" o sistema deve processar os dados.
+
+Aqui estão **três opções** de melhoria, dependendo do seu objetivo (se você vai passar para um desenvolvedor, para uma IA generativa ou se quer um documento de requisitos):
+
+---
+
+### Opção 1: O Prompt para Engenheiro de Software/IA (Foco Técnico)
+Este prompt é ideal se você estiver usando o ChatGPT, Claude ou um desenvolvedor para escrever o código do sistema.
+
+> "Atue como um Arquiteto de Software e Especialista em Real Estate. Preciso desenvolver uma plataforma de **Inteligência Geográfica (GIS)** para prospecção de terrenos.
+>
+> **Objetivo:** Identificar lotes vazios (sem área construída) via processamento de imagem de satélite e dados cadastrais, filtrados por metragem mínima (ex: >500m²).
+>
+> **Funcionalidades Core:**
+> 1. **Visualização:** Mapa interativo (Leaflet/Mapbox) com camadas de polígonos de lotes.
+> 2. **Identificação de Lotes Vazios:** Cruzamento de dados da prefeitura (IPTU/Cadastro Imobiliário) com visão computacional para detectar ausência de telhados/estruturas.
+> 3. **Integração de Dados:** Ao clicar no lote, o sistema deve buscar em APIs de cartórios ou bases públicas: Matrícula, Área Real, Proprietário e Dívidas Ativas.
+> 4. **Motor de Score de Viabilidade:** Criar um algoritmo que pontue o lote (0-100) baseado em:
+>    - **Topografia:** Dados de curvas de nível (SRTM/Lidar) para detectar desnível e queda.
+>    - **Infraestrutura:** Proximidade de asfalto, rede elétrica e esgoto.
+>    - **Zoneamento:** Verificar se o Plano Diretor permite o uso desejado (Condomínio Residencial vs. Logístico).
+> 5. **Modularidade:** O usuário deve poder trocar o 'Perfil de Investimento' (Ex: 'Condomínio de Casas' exige declividade baixa; 'Galpão Logístico' exige proximidade de rodovias).
+>
+> **Saída esperada:** Um dashboard onde eu filtre o ROI potencial e veja os melhores lotes destacados no mapa."
+
+---
+
+### Opção 2: Foco em Análise de Dados e Viabilidade (Foco no Negócio)
+Use este se você quer que o sistema foque na parte financeira e técnica do terreno.
+
+> "Desenvolva um sistema de análise preditiva para compra de terrenos. O sistema deve realizar um **Estudo de Viabilidade Autônomo (EVA)**.
+>
+> **Requisitos de Entrada:** Metragem quadrada mínima e finalidade do empreendimento (residencial, comercial ou logístico).
+>
+> **Processamento de Viabilidade:**
+> - **Análise Geográfica:** Identificar terrenos baldios e calcular a inclinação do solo (análise de corte e aterro).
+> - **Análise de Vizinhança:** Score baseado na pavimentação, valor do m² da região e equipamentos públicos próximos.
+> - **Legal Score:** Integração com a base de dados da prefeitura para checar recuos obrigatórios, taxa de ocupação e coeficiente de aproveitamento.
+>
+> **Interface:** Mapa de calor (Heatmap) mostrando as áreas com maior potencial de lucro. Pop-up com dados de contato do proprietário e link para a matrícula digital."
+
+---
+
+### Opção 3: Prompt "User Story" (Para Gestão de Projeto)
+Ideal para definir as telas e a experiência do usuário.
+
+> "Como investidor imobiliário, quero uma ferramenta que automatize o 'hunting' de terrenos.
+>
+> 1. **Filtro Avançado:** Eu defino 'Lotes entre 500m² e 2000m²', 'Topografia Plana' e 'Zoneamento ZEU'.
+> 2. **Visualização:** O sistema limpa o mapa e deixa apenas os polígonos que atendem aos requisitos.
+> 3. **Dossiê do Lote:** Ao clicar, recebo um relatório em PDF contendo: proprietário, histórico de preços, análise de solo (estimada), e facilidade de acesso.
+> 4. **Configuração Customizável:** Quero poder salvar 'Templates de Busca'. Ex: Template 'Minha Casa Minha Vida' foca em preço baixo e transporte público. Template 'Galpão' foca em pé direito permitido e acesso de carretas."
+
+---
+
+### Dicas extras para o seu projeto:
+
+1.  **Fontes de Dados:** Para isso funcionar no Brasil, você precisará integrar com:
+    *   **Google Maps API / Mapbox:** Para visualização e satélite.
+    *   **OpenStreetMap (OSM):** Para dados de infraestrutura e arruamento.
+    *   **Geosampa / GeoRio (ou similar da sua cidade):** Para baixar os arquivos SHP (Shapefiles) com os polígonos exatos de cada lote e zoneamento.
+    *   **API de Cartórios (ex: Registradores):** Para dados de matrícula (isso geralmente tem custo por consulta).
+2.  **O Desafio do "Dono":** Conseguir o telefone do dono automaticamente é a parte mais difícil devido à LGPD. O sistema pode automatizar a busca no Google/LinkedIn pelo nome do proprietário que consta no IPTU ou matrícula.
+3.  **IA de Imagem:** Você pode usar modelos de IA (como Segment Anything do Meta) para identificar áreas verdes ou terra batida em imagens de satélite, confirmando que o lote está vazio.
+
+Qual dessas abordagens você prefere seguir? Posso te ajudar a detalhar o código para uma dessas funcionalidades específicas.
