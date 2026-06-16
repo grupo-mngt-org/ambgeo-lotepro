@@ -53,6 +53,11 @@
         <p id="first-run-hint" class="hint">A 1ª análise de uma região baixa os footprints
           de edificações (Microsoft) — pode levar alguns minutos; depois fica em cache.</p>
 
+        <button id="btn-pick" class="secondary">📍 Estudar um terreno (clique / desenho)</button>
+        <p id="pick-hint" class="hint hidden">Modo seleção ativo: <b>clique</b> num ponto
+          (usa o imóvel do CAR, se houver) ou <b>arraste</b> para desenhar um retângulo.
+          Esc cancela.</p>
+
         <!-- Progresso do job -->
         <div id="progress" class="hidden">
           <div class="pg-bar"><i id="pg-fill"></i></div>
@@ -63,6 +68,12 @@
 
         <!-- Relatório (preenchido após a análise) -->
         <div id="report" class="hidden"></div>
+
+        <!-- Mapa de bolhas da cidade (Motor de Bolhas — determinístico) -->
+        <div id="bolhas-map-bar" class="hidden">
+          <button id="btn-bolhas-map" class="secondary">🫧 Mapa de bolhas da cidade</button>
+        </div>
+        <div id="bolhas-summary" class="hidden"></div>
 
         <!-- Ranking dos melhores lotes -->
         <div id="ranking" class="hidden"></div>
@@ -105,6 +116,35 @@
           <div id="lay-msg" class="hint"></div>
         </div>
 
+        <!-- Estudo de Bolha (Motor de Bolhas — IA) -->
+        <div id="bolha-panel" class="hidden">
+          <h3>🫧 Estudo de bolha <span id="bo-lot"></span></h3>
+          <p class="hint">Qual <b>Bolha Incrível</b> desenvolver neste terreno — recomendação,
+            score de aplicabilidade e a caixa de produto, geradas por IA a partir do contexto.</p>
+          <label>Faixa MCMV alvo (opcional)
+            <select id="bo-faixa">
+              <option value="">IA infere pelo contexto</option>
+              <option value="1">Faixa 1 (até R$ 3.200)</option>
+              <option value="2">Faixa 2 (até R$ 5.000)</option>
+              <option value="3">Faixa 3 (até R$ 9.600 · teto 400k)</option>
+              <option value="4">Faixa 4 (até R$ 13.000 · teto 600k)</option>
+            </select>
+          </label>
+          <button id="bo-run">⚡ Analisar bolha</button>
+          <!-- Progresso do job de IA -->
+          <div id="bo-progress" class="hidden">
+            <div class="pg-bar"><i id="bo-fill"></i></div>
+            <div class="pg-row"><span id="bo-stage"></span><span id="bo-pct"></span></div>
+          </div>
+          <div id="bo-result"></div>
+          <div class="row">
+            <button id="bo-save" class="secondary hidden">💾 Salvar na ficha</button>
+            <button id="bo-print" class="secondary hidden">🖨️ Dossiê</button>
+            <button id="bo-close" class="secondary">Fechar</button>
+          </div>
+          <div id="bo-msg" class="hint"></div>
+        </div>
+
         <!-- Ficha do lote (CRM de prospecção) -->
         <div id="ficha" class="hidden">
           <h3>📋 Ficha do lote <span id="ficha-lot"></span></h3>
@@ -112,6 +152,9 @@
           <!-- Consulta pública automática: endereço oficial + links -->
           <div id="fi-registry" class="reg-box">Consultando endereço oficial…</div>
           <div id="ficha-links" class="ficha-links"></div>
+
+          <!-- Imóvel rural no CAR (SICAR — dados em tela) -->
+          <div id="fi-car" class="reg-box">🌳 Consultando CAR (imóvel rural)…</div>
 
           <!-- Proprietário PJ: CNPJ → Receita Federal (BrasilAPI) -->
           <div class="reg-box">

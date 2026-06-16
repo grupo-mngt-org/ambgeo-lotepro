@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: ambgeo-lotepro
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    # Render detecta o PORT automaticamente
+    envVars:
+      - key: LOTEPRO_USER
+        value: admin
+      - key: LOTEPRO_PASSWORD
+        generateValue: true          # Render gera senha segura aleatória
+      - key: LOTEPRO_SECRET
+        generateValue: true          # Render gera secret JWT aleatório
+      - key: LOTEPRO_DATA_DIR
+        value: /tmp/lotepro-data
+      # Motor de Bolhas (IA) — opcional: preencha no dashboard do Render
+      # - key: OPENROUTER_KEY
+      #   value: sk-or-v1-...
+      # - key: OPENROUTER_MODEL
+      #   value: meta-llama/llama-3.3-70b-instruct:free

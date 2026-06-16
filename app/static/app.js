@@ -23,10 +23,15 @@ function scoreColor(score) {
 
 // Mapa com basemap de satélite gratuito (Esri World Imagery, sem chave).
 // preferCanvas: milhares de polígonos (cidade inteira) sem travar o DOM.
-const map = L.map("map", { preferCanvas: true }).setView([-15.78, -47.93], 12);
+const map = L.map("map", { preferCanvas: true, maxZoom: 21 }).setView([-15.78, -47.93], 12);
 L.tileLayer(
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  { maxZoom: 20, attribution: "Tiles &copy; Esri" }
+  {
+    // O Esri World Imagery só tem imagem real até ~z19 na maior parte do Brasil;
+    // pedir z20+ devolve o tile cinza "Map data not yet available". maxNativeZoom
+    // faz o Leaflet AMPLIAR o último tile real em vez de pedir um que não existe.
+    maxNativeZoom: 19, maxZoom: 21, attribution: "Tiles &copy; Esri",
+  }
 ).addTo(map);
 
 function msg(text, kind = "") { const el = $("msg"); el.textContent = text; el.className = kind; }
@@ -261,6 +266,11 @@ function onAnalysis(data) {
   lastFeatures = (data.results && data.results.features) || [];
   lotsInfo = data.lots_info || {};
   closeLayout();
+  // Reseta o Motor de Bolhas para a nova análise.
+  $("bolha-panel").classList.add("hidden"); bolhaLot = null;
+  colorMode = "score"; bolhaLineByLot = {};
+  $("bolhas-summary").classList.add("hidden");
+  $("bolhas-map-bar").classList.toggle("hidden", !lastFeatures.length);
 
   if (boundaryLayer) { map.removeLayer(boundaryLayer); boundaryLayer = null; }
   if (data.boundary) {
@@ -325,11 +335,14 @@ function popupHtml(p) {
   if (info.status && info.status !== "novo") html += `Status: <b>${info.status}</b><br>`;
   if (info.layout && info.layout.stats)
     html += `Estudo salvo: <b>${info.layout.stats.units} casas</b><br>`;
+  if (info.bolha && info.bolha.bolha_nome)
+    html += `🫧 Bolha: <b>${info.bolha.bolha_nome}</b> (${info.bolha.score_aplicabilidade}/100)<br>`;
 
   html += `<div class="pp-links">`
     + `<a href="${p.street_view}" target="_blank">📍 Street View</a>`
     + ` · <a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}" target="_blank">🗺️ Maps</a>`
     + ` · <a href="https://www.registrodeimoveis.org.br" target="_blank">🏛️ ONR (matrícula)</a></div>`;
+  html += `<button class="pp-bolha" onclick="openBolha(${p.id})">🫧 Analisar bolha (IA)</button>`;
   html += `<button class="pp-ficha" onclick="openFicha(${p.id})">📋 Ficha do lote</button>`;
   html += `<button class="pp-layout" onclick="openLayout(${p.id})">🏘️ Estudo de implantação</button>`;
   return html;
@@ -340,7 +353,7 @@ function drawFeatures(features) {
   resultLayer = L.geoJSON({ type: "FeatureCollection", features }, {
     style: (f) => ({
       color: "#fff", weight: 1,
-      fillColor: scoreColor(f.properties.score) || f.properties.color,
+      fillColor: featureFill(f),
       fillOpacity: 0.55,
     }),
     onEachFeature: (f, layer) => {
@@ -470,6 +483,9 @@ const LAYOUT_STYLES = {
 function drawLayout(data) {
   if (layoutLayer) map.removeLayer(layoutLayer);
   layoutLayer = L.geoJSON(data.features, {
+    // interactive:false → o desenho da implantação NÃO captura cliques; assim dá
+    // para clicar em outro lote por baixo e abrir um novo estudo.
+    interactive: false,
     style: (f) => LAYOUT_STYLES[f.properties.kind] || {},
   }).addTo(map);
 }
@@ -546,7 +562,7 @@ window.openFicha = function (lotId) {
   renderProcLinks();
 
   const f = lastFeatures.find((x) => x.properties.id === lotId);
-  if (f) loadRegistry(f.properties);
+  if (f) { loadRegistry(f.properties); loadCar(f.properties); }
   $("ficha").classList.remove("hidden");
   $("ficha").scrollIntoView({ behavior: "smooth" });
 };
@@ -577,6 +593,51 @@ async function loadRegistry(p) {
     renderProcLinks();
   } catch (err) {
     box.innerHTML = `<span class="err">Consulta de endereço falhou: ${err.message}</span>`;
+  }
+}
+
+// Imóvel rural no CAR (SICAR) — traz os dados em tela (não só link).
+let carLayer = null;
+async function loadCar(p) {
+  const box = $("fi-car");
+  box.innerHTML = "🌳 Consultando CAR (imóvel rural)…";
+  try {
+    const c = await (await api(`/api/registry/car?lat=${p.lat}&lon=${p.lon}`)).json();
+    if (!c.found) {
+      box.innerHTML = `<h4>🌳 CAR — Cadastro Ambiental Rural</h4>
+        <div class="hint">Este ponto não está dentro de um imóvel rural cadastrado
+        (normal em área urbana). <a href="https://consultapublica.car.gov.br/publico/imoveis/index" target="_blank">Abrir consulta pública do CAR</a></div>`;
+      return;
+    }
+    const areaTxt = c.area_ha != null
+      ? c.area_ha.toLocaleString("pt-BR", { maximumFractionDigits: 4 }) + " ha" : "—";
+    box.innerHTML = `<h4>🌳 CAR — Imóvel rural</h4>
+      <div class="reg-addr">
+        Status do cadastro: <b>${c.status_label || "—"}</b><br>
+        Tipo de imóvel: <b>${c.tipo_label || "—"}</b><br>
+        Município: <b>${c.municipio || "—"}</b><br>
+        Área: <b>${areaTxt}</b><br>
+        ${c.data_disponibilizacao ? `Atualização: ${c.data_disponibilizacao}<br>` : ""}
+        Código CAR: <code>${c.codigo || "—"}</code>
+      </div>
+      <div class="ficha-links">
+        ${c.url ? `<a href="${c.url}" target="_blank">🔗 Abrir no CAR (car.gov.br)</a>` : ""}
+        <button class="secondary" id="fi-car-draw">📐 Mostrar imóvel no mapa</button>
+      </div>`;
+    if (c.geometry) {
+      $("fi-car-draw").onclick = () => {
+        if (carLayer) map.removeLayer(carLayer);
+        carLayer = L.geoJSON(c.geometry, {
+          interactive: false,
+          style: { color: "#16a34a", weight: 2, fillColor: "#22c55e",
+                   fillOpacity: 0.18, dashArray: "5 4" },
+        }).addTo(map);
+        if (carLayer.getBounds().isValid())
+          map.fitBounds(carLayer.getBounds(), { padding: [40, 40] });
+      };
+    }
+  } catch (e) {
+    box.innerHTML = `<span class="err">Consulta CAR falhou: ${e.message}</span>`;
   }
 }
 
@@ -765,5 +826,349 @@ document.querySelectorAll(".exp").forEach((b) => {
     } catch (e) { msg(e.message, "err"); }
   };
 });
+
+// ===================== Motor de Bolhas (IA) ===============================
+const LINE_COLORS = {
+  "Área Conquista": "#0ea5e9", "Área Conforto": "#22c55e",
+  "Área Detalhe": "#a855f7", "Área Estilo": "#ef4444", "Área +Vida": "#f59e0b",
+};
+let bolhaLot = null;          // lote com estudo de bolha aberto
+let lastBolha = null;         // último estudo gerado/carregado
+let bolhaPolling = false;
+let colorMode = "score";      // "score" | "bolha"
+let bolhaLineByLot = {};      // {lot_id: {linha, bolha, score}} para o mapa de bolhas
+
+// Cor de preenchimento do lote: por score (default) ou por linha de bolha (mapa).
+function featureFill(f) {
+  if (colorMode === "bolha") {
+    const ln = (bolhaLineByLot[String(f.properties.id)] || {}).linha;
+    return LINE_COLORS[ln] || "#94a3b8";
+  }
+  return scoreColor(f.properties.score) || f.properties.color;
+}
+
+$("btn-bolhas-map").onclick = loadBolhasMap;
+
+window.openBolha = function (lotId) {
+  bolhaLot = lotId;
+  const f = lastFeatures.find((x) => x.properties.id === lotId);
+  $("bo-lot").textContent = "#" + lotId
+    + (f ? ` · ${f.properties.area_m2.toLocaleString("pt-BR")} m²` : "");
+  $("bo-msg").textContent = "";
+  $("bo-progress").classList.add("hidden");
+  const saved = (lotsInfo[String(lotId)] || {}).bolha;
+  if (saved) { lastBolha = saved; renderBolhaStudy(saved); $("bo-save").classList.add("hidden"); $("bo-print").classList.remove("hidden"); }
+  else { lastBolha = null; $("bo-result").innerHTML =
+    `<p class="hint">Clique em <b>Analisar bolha</b> para gerar o estudo de viabilidade.</p>`;
+    $("bo-save").classList.add("hidden"); $("bo-print").classList.add("hidden"); }
+  $("bolha-panel").classList.remove("hidden");
+  map.closePopup();
+  focusLot(lotId);
+  $("bolha-panel").scrollIntoView({ behavior: "smooth" });
+};
+
+$("bo-run").onclick = async () => {
+  if (bolhaLot == null) return;
+  const f = lastFeatures.find((x) => x.properties.id === bolhaLot);
+  if (!f) return ($("bo-msg").textContent = "Lote não encontrado.");
+  const faixa = $("bo-faixa").value ? parseInt($("bo-faixa").value) : null;
+  const savedLayout = (lotsInfo[String(bolhaLot)] || {}).layout;
+  $("bo-msg").textContent = "";
+  $("bo-result").innerHTML = "";
+  $("bo-save").classList.add("hidden");
+  $("bo-print").classList.add("hidden");
+  $("bo-run").disabled = true;
+  $("bo-progress").classList.remove("hidden");
+  $("bo-fill").style.width = "0%";
+  $("bo-stage").textContent = "Enviando…";
+  $("bo-pct").textContent = "";
+  try {
+    const data = await (await api("/api/bolha/analyze", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_id: lastProjectId, lot_id: bolhaLot,
+        properties: f.properties, lat: f.properties.lat, lon: f.properties.lon,
+        target_faixa: faixa,
+        layout_stats: savedLayout ? savedLayout.stats : null,
+      }),
+    })).json();
+    pollBolhaJob(data.job_id);
+  } catch (e) {
+    $("bo-run").disabled = false;
+    $("bo-progress").classList.add("hidden");
+    $("bo-msg").textContent = "Erro: " + e.message;
+  }
+};
+
+async function pollBolhaJob(jobId) {
+  if (bolhaPolling) return;
+  bolhaPolling = true;
+  const tick = async () => {
+    let j;
+    try { j = await (await api(`/api/jobs/${jobId}`)).json(); }
+    catch (e) {
+      bolhaPolling = false; $("bo-run").disabled = false;
+      $("bo-progress").classList.add("hidden");
+      return ($("bo-msg").textContent = "Erro ao consultar: " + e.message);
+    }
+    if (j.status === "running") {
+      $("bo-fill").style.width = (j.progress || 0) + "%";
+      $("bo-stage").textContent = j.stage || "Processando…";
+      $("bo-pct").textContent = (j.progress || 0).toFixed(0) + "%";
+      return setTimeout(tick, 1000);
+    }
+    bolhaPolling = false;
+    $("bo-run").disabled = false;
+    $("bo-progress").classList.add("hidden");
+    if (j.status === "error") return ($("bo-msg").textContent = "Erro: " + j.error);
+    const est = j.result.estudo;
+    lastBolha = est;
+    if (j.result.ficha) lotsInfo[String(bolhaLot)] = j.result.ficha;
+    renderBolhaStudy(est);
+    $("bo-save").classList.remove("hidden");
+    $("bo-print").classList.remove("hidden");
+    $("bo-msg").textContent = est.modo === "ia"
+      ? `✔ Estudo gerado pela IA (${est.modelo}).`
+      : "⚠ IA indisponível — estudo por regras determinísticas.";
+  };
+  tick();
+}
+
+function fmtBRL(v) {
+  if (v == null || isNaN(v)) return "—";
+  return "R$ " + Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+}
+
+function renderBolhaStudy(est) {
+  const sc = est.score_aplicabilidade;
+  const ring = scoreColor(sc) || "#64748b";
+  const progs = est.programas || {};
+  const progChips = Object.keys(progs).map((k) => {
+    const vv = progs[k]; const inc = vv && (vv.incluir != null ? vv.incluir : vv);
+    const nome = k === "area_segura" ? "Área Segura" : k === "arte_incrivel" ? "Arte Incrível" : k;
+    return `<span class="bo-prog ${inc ? "on" : "off"}" title="${(vv && vv.motivo) || ""}">${inc ? "✓" : "✕"} ${nome}</span>`;
+  }).join("");
+  const mods = (est.modulos_sugeridos || []).map((m) => `<span class="bo-chip">${m}</span>`).join("");
+  const riscos = (est.riscos || []).map((r) => `<li>${r}</li>`).join("");
+  const passos = (est.proximos_passos || []).map((p) => `<li>${p}</li>`).join("");
+  const alts = (est.alternativas || []).map((a) =>
+    `<li><b>${a.bolha_nome}</b> ${a.score != null ? `<span class="bo-altscore">${a.score}</span>` : ""} — ${a.porque || ""}</li>`).join("");
+  const v = est.viabilidade || {};
+  const chk = est.checklist || {};
+  const chkRows = Object.keys(chk).length
+    ? `<div class="bo-block"><h4>✅ Checklist da caixa de produto</h4><ul class="bo-chk">`
+      + Object.entries(chk).map(([k, val]) => `<li><b>${k.replace(/_/g, " ")}:</b> ${val}</li>`).join("")
+      + `</ul></div>` : "";
+
+  $("bo-result").innerHTML = `
+    <div class="bo-head">
+      <div class="bo-ring" style="--c:${ring}"><span>${sc}</span><small>/100</small></div>
+      <div class="bo-title">
+        <div class="bo-line">${est.linha || ""}</div>
+        <div class="bo-name">${est.bolha_nome || ""}</div>
+        <div class="bo-faixa">${est.faixa_label || ""}</div>
+      </div>
+    </div>
+    ${est.modo !== "ia" ? `<div class="pp-flag">${est.aviso_ia || "Modo determinístico (IA indisponível)."}</div>` : ""}
+    ${est.divergencia ? `<div class="pp-flag">⚖️ ${est.divergencia}</div>` : ""}
+    <div class="bo-block"><h4>👥 Público-alvo</h4><p>${est.publico_alvo || "—"}</p></div>
+    <div class="bo-block"><h4>🎯 Promessa central</h4><p>${est.promessa_central || "—"}</p>
+      ${est.narrativa ? `<p class="hint">${est.narrativa}</p>` : ""}</div>
+    ${est.tipologia ? `<div class="bo-block"><h4>🏠 Tipologia</h4><p>${est.tipologia}</p></div>` : ""}
+    <div class="bo-block"><h4>🧱 Módulos sugeridos</h4><div class="bo-chips">${mods || "—"}</div></div>
+    <div class="bo-block"><h4>➕ Programas acopláveis</h4><div class="bo-progs">${progChips || "—"}</div></div>
+    <div class="bo-block bo-econ"><h4>💰 Viabilidade econômica</h4>
+      <div class="bo-econ-grid">
+        <span>Preço/unidade${v.preco_teto_oficial ? " (teto)" : " (ref.)"}</span><b>${fmtBRL(v.preco_unidade_ref)}</b>
+        <span>Unidades${v.unidades_estimadas ? " (estim.)" : ""}</span><b>${v.unidades ?? "—"}</b>
+        <span>VGV estimado</span><b>${fmtBRL(v.vgv_estimado)}</b>
+        <span>Custo-alvo máx. (margem ${v.margem_alvo != null ? Math.round(v.margem_alvo * 100) + "%" : "—"})</span><b>${fmtBRL(v.custo_alvo_max)}</b>
+      </div>
+      <p class="hint">${v.observacao || ""}</p></div>
+    ${riscos ? `<div class="bo-block"><h4>⚠️ Riscos</h4><ul>${riscos}</ul></div>` : ""}
+    ${chkRows}
+    ${est.justificativa ? `<div class="bo-block"><h4>🧭 Justificativa</h4><p>${est.justificativa}</p></div>` : ""}
+    ${passos ? `<div class="bo-block"><h4>👉 Próximos passos</h4><ul>${passos}</ul></div>` : ""}
+    ${alts ? `<div class="bo-block"><h4>🔁 Bolhas alternativas</h4><ul class="bo-alts">${alts}</ul></div>` : ""}
+    <p class="hint bo-aviso">${est.aviso || ""}${est.modelo ? ` · Modelo: ${est.modelo}` : ""}</p>`;
+}
+
+$("bo-save").onclick = async () => {
+  if (bolhaLot == null || !lastProjectId || !lastBolha) return;
+  try {
+    const saved = await (await api(`/api/projects/${lastProjectId}/lots/${bolhaLot}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bolha: lastBolha }),
+    })).json();
+    lotsInfo[String(bolhaLot)] = saved;
+    $("bo-msg").textContent = "✔ Estudo de bolha salvo na ficha.";
+    $("bo-save").classList.add("hidden");
+    renderRanking(lastFeatures);
+  } catch (e) { $("bo-msg").textContent = "Erro: " + e.message; }
+};
+
+$("bo-close").onclick = () => { $("bolha-panel").classList.add("hidden"); bolhaLot = null; };
+
+// Dossiê imprimível — abre uma janela formatada e dispara a impressão/PDF.
+$("bo-print").onclick = () => {
+  if (!lastBolha) return;
+  const est = lastBolha, v = est.viabilidade || {};
+  const lote = est.lote || {};
+  const mods = (est.modulos_sugeridos || []).map((m) => `<li>${m}</li>`).join("");
+  const riscos = (est.riscos || []).map((r) => `<li>${r}</li>`).join("");
+  const passos = (est.proximos_passos || []).map((p) => `<li>${p}</li>`).join("");
+  const w = window.open("", "_blank");
+  w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
+    <title>Dossiê da Bolha — Lote ${lote.id ?? ""}</title>
+    <style>
+      body{font:14px/1.5 system-ui,Arial,sans-serif;color:#1e293b;max-width:760px;margin:24px auto;padding:0 16px}
+      h1{font-size:22px;margin:0 0 4px} h2{font-size:15px;border-bottom:2px solid #e2e8f0;padding-bottom:3px;margin:18px 0 6px}
+      .badge{display:inline-block;background:#0ea5e9;color:#fff;border-radius:6px;padding:3px 10px;font-weight:700}
+      .grid{display:grid;grid-template-columns:1fr auto;gap:4px 16px}.grid span{color:#64748b}.grid b{text-align:right}
+      .muted{color:#64748b;font-size:12px} ul{margin:4px 0;padding-left:20px}
+      @media print{button{display:none}}
+    </style></head><body>
+    <button onclick="window.print()" style="float:right">🖨️ Imprimir / PDF</button>
+    <h1>🫧 Dossiê da Bolha</h1>
+    <div class="muted">Lote #${lote.id ?? ""} · ${est.endereco || "endereço n/d"} · ${(lote.area_m2 || 0).toLocaleString("pt-BR")} m²</div>
+    <h2>Recomendação</h2>
+    <p><span class="badge">${est.score_aplicabilidade}/100</span>
+       <b>${est.bolha_nome}</b> — ${est.linha} · ${est.faixa_label || ""}</p>
+    <h2>Público &amp; promessa</h2>
+    <p><b>Público:</b> ${est.publico_alvo || "—"}</p>
+    <p><b>Promessa:</b> ${est.promessa_central || "—"}</p>
+    ${est.narrativa ? `<p class="muted">${est.narrativa}</p>` : ""}
+    ${est.tipologia ? `<p><b>Tipologia:</b> ${est.tipologia}</p>` : ""}
+    <h2>Módulos</h2><ul>${mods || "<li>—</li>"}</ul>
+    <h2>Viabilidade econômica</h2>
+    <div class="grid">
+      <span>Preço/unidade${v.preco_teto_oficial ? " (teto)" : " (ref.)"}</span><b>${fmtBRL(v.preco_unidade_ref)}</b>
+      <span>Unidades${v.unidades_estimadas ? " (estim.)" : ""}</span><b>${v.unidades ?? "—"}</b>
+      <span>VGV estimado</span><b>${fmtBRL(v.vgv_estimado)}</b>
+      <span>Custo-alvo máx.</span><b>${fmtBRL(v.custo_alvo_max)}</b>
+    </div><p class="muted">${v.observacao || ""}</p>
+    ${riscos ? `<h2>Riscos</h2><ul>${riscos}</ul>` : ""}
+    ${est.justificativa ? `<h2>Justificativa</h2><p>${est.justificativa}</p>` : ""}
+    ${passos ? `<h2>Próximos passos</h2><ul>${passos}</ul>` : ""}
+    <h2 class="muted" style="border:0">Método</h2>
+    <p class="muted">${est.aviso || ""}${est.modelo ? ` · Gerado por ${est.modelo}.` : " · Modo determinístico."}</p>
+    </body></html>`);
+  w.document.close();
+};
+
+// ----------------- Mapa de bolhas da cidade (determinístico) ----------------
+async function loadBolhasMap() {
+  if (!lastProjectId) return msg("Faça uma análise primeiro.", "err");
+  msg("Calculando mapa de bolhas…");
+  try {
+    const data = await (await api(`/api/projects/${lastProjectId}/bolhas-map`)).json();
+    bolhaLineByLot = data.lot_line || {};
+    colorMode = "bolha";
+    drawFeatures(lastFeatures);
+    const legend = (data.by_line || []).map((l) =>
+      `<li><i style="background:${LINE_COLORS[l.linha] || "#64748b"}"></i>
+        <b>${l.linha}</b> — ${l.count} lotes · ${l.area_ha} ha</li>`).join("");
+    const box = $("bolhas-summary");
+    box.innerHTML = `<h3>🫧 Mapa de bolhas <button id="bolhas-map-off" class="secondary">Voltar ao score</button></h3>
+      <p class="hint">Melhor bolha por lote (regra determinística) nos ${data.analyzed} maiores de ${data.total}.</p>
+      <ul class="bo-legend">${legend}</ul>`;
+    box.classList.remove("hidden");
+    $("bolhas-map-off").onclick = () => {
+      colorMode = "score"; drawFeatures(lastFeatures); box.classList.add("hidden");
+    };
+    msg(`Mapa de bolhas: ${data.analyzed} lotes classificados.`, "ok");
+  } catch (e) { msg("Erro: " + e.message, "err"); }
+}
+
+// ---------- Selecionar/desenhar o próprio terreno (clique CAR / retângulo) ----
+let pickMode = false, pickStart = null, pickMoved = false, pickRect = null;
+let drawnCounter = 900001;
+
+function setPick(on) {
+  pickMode = on;
+  $("pick-hint").classList.toggle("hidden", !on);
+  $("btn-pick").textContent = on ? "✖ Cancelar seleção" : "📍 Estudar um terreno (clique / desenho)";
+  map.getContainer().style.cursor = on ? "crosshair" : "";
+  if (on) map.dragging.disable(); else map.dragging.enable();
+  if (!on && pickRect) { map.removeLayer(pickRect); pickRect = null; }
+  pickStart = null; pickMoved = false;
+}
+$("btn-pick").onclick = () => setPick(!pickMode);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && pickMode) setPick(false); });
+
+map.on("mousedown", (e) => {
+  if (!pickMode) return;
+  pickStart = e.latlng; pickMoved = false;
+  if (pickRect) { map.removeLayer(pickRect); pickRect = null; }
+});
+map.on("mousemove", (e) => {
+  if (!pickMode || !pickStart) return;
+  if (pickStart.distanceTo(e.latlng) > 4) pickMoved = true;
+  if (!pickMoved) return;
+  const b = L.latLngBounds(pickStart, e.latlng);
+  if (pickRect) pickRect.setBounds(b);
+  else pickRect = L.rectangle(b, { color: "#0ea5e9", weight: 2, dashArray: "5 4", fillOpacity: 0.1 }).addTo(map);
+});
+map.on("mouseup", async (e) => {
+  if (!pickMode || !pickStart) return;
+  const start = pickStart, moved = pickMoved;
+  pickStart = null; pickMoved = false;
+  if (moved && pickRect) {                      // desenhou um retângulo
+    const b = pickRect.getBounds();
+    map.removeLayer(pickRect); pickRect = null;
+    const w = b.getWest(), s = b.getSouth(), ee = b.getEast(), n = b.getNorth();
+    setPick(false);
+    studyGeometry({ type: "Polygon",
+      coordinates: [[[w, s], [ee, s], [ee, n], [w, n], [w, s]]] });
+  } else {                                        // clique simples → tenta CAR
+    msg("Consultando imóvel do CAR neste ponto…");
+    try {
+      const c = await (await api(`/api/registry/car?lat=${start.lat}&lon=${start.lng}`)).json();
+      if (c.found && c.geometry) {
+        setPick(false);
+        msg(`Imóvel rural do CAR: ${c.municipio || ""} · ${c.area_ha} ha. Estudando…`, "ok");
+        studyGeometry(c.geometry);
+      } else {
+        msg("Nenhum imóvel do CAR aqui. Arraste para desenhar um retângulo (ou Esc p/ sair).", "err");
+      }
+    } catch (err) { msg("Erro CAR: " + err.message, "err"); }
+  }
+});
+
+async function studyGeometry(geometry) {
+  msg("Estudando terreno selecionado…");
+  try {
+    if (!lastProjectId) {  // cria projeto p/ permitir salvar ficha/bolha
+      const pj = await (await api("/api/projects", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Terrenos selecionados" }),
+      })).json();
+      lastProjectId = pj.id;
+    }
+    const nid = drawnCounter++;
+    const data = await (await api("/api/parcel/study", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        geometry, profile: $("profile").value,
+        target_min_m2: parseFloat($("target-min").value) || null,
+        target_max_m2: parseFloat($("target-max").value) || null,
+        next_id: nid,
+      }),
+    })).json();
+    const feats = (data.results && data.results.features) || [];
+    if (!feats.length) return msg("Não foi possível estudar este terreno.", "err");
+    const f = feats[0];
+    lastFeatures.push(f);
+    $("bolhas-map-bar").classList.remove("hidden");
+    drawFeatures(lastFeatures);
+    renderRanking(lastFeatures);
+    focusLot(f.properties.id);
+    resultLayer.eachLayer((l) => { if (l._lotId === f.properties.id) l.openPopup(); });
+    msg(`✔ Terreno estudado (lote ${f.properties.id} · `
+      + `${Math.round(f.properties.area_m2).toLocaleString("pt-BR")} m²`
+      + `${f.properties.score != null ? ` · score ${f.properties.score}` : ""}). `
+      + `Abra 🫧 Analisar bolha no popup.`, "ok");
+  } catch (e) { msg("Erro: " + e.message, "err"); }
+}
 
 setMode("city");

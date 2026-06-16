@@ -28,6 +28,8 @@ button.exp { background: #475569; }
 button.secondary { background: #475569; }
 button#btn-analyze { background: #1e8e3e; font-size: 14px; padding: 10px; }
 button#btn-analyze:hover { background: #157233; }
+button#btn-pick { margin-top: 6px; }
+#pick-hint { background: #e0f2fe; border-radius: 6px; padding: 6px 8px; color: #0c4a6e; }
 
 /* Autocomplete */
 .search-wrap { position: relative; }
@@ -121,6 +123,55 @@ button.pp-layout { background: #1e8e3e; font-size: 12px; padding: 6px; margin-to
 .ficha-links { display: flex; flex-direction: column; gap: 3px; font-size: 12px;
   background: #f0f4f8; border-radius: 6px; padding: 8px; margin: 6px 0; }
 #fi-msg { color: #1e8e3e; min-height: 14px; }
+
+/* Motor de Bolhas (IA) */
+button.pp-bolha { background: #0ea5e9; font-size: 12px; padding: 6px; margin-top: 4px; width: 100%; }
+button.pp-bolha:hover { background: #0284c7; }
+#bolha-panel { margin-top: 14px; background: #fff; border: 1px solid #dbe1e8;
+  border-radius: 8px; padding: 10px; }
+#bolha-panel #bo-run { background: #0ea5e9; padding: 9px; font-size: 14px; margin-top: 4px; }
+#bolha-panel #bo-run:hover { background: #0284c7; }
+#bo-progress { margin: 8px 0; }
+#bo-msg { color: #1e8e3e; min-height: 14px; }
+.bo-head { display: flex; align-items: center; gap: 12px; margin: 6px 0 10px; }
+.bo-ring { flex-shrink: 0; width: 64px; height: 64px; border-radius: 50%;
+  background: var(--c); color: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.bo-ring span { font-size: 24px; font-weight: 800; line-height: 1; }
+.bo-ring small { font-size: 10px; opacity: .85; }
+.bo-title .bo-line { font-size: 11px; color: #0ea5e9; text-transform: uppercase;
+  letter-spacing: .03em; font-weight: 700; }
+.bo-title .bo-name { font-size: 17px; font-weight: 800; color: #1f2d3d; line-height: 1.2; }
+.bo-title .bo-faixa { font-size: 11px; color: #52606d; margin-top: 2px; }
+.bo-block { margin: 8px 0; }
+.bo-block h4 { margin: 6px 0 3px; }
+.bo-block p { margin: 2px 0; font-size: 12px; line-height: 1.5; color: #334155; }
+.bo-block ul { font-size: 12px; color: #334155; padding-left: 18px; margin: 3px 0; line-height: 1.5; }
+.bo-chips, .bo-progs { display: flex; flex-wrap: wrap; gap: 4px; }
+.bo-chip { background: #e8f0fe; color: #1d4ed8; border-radius: 12px; padding: 2px 9px; font-size: 11px; }
+.bo-prog { border-radius: 12px; padding: 2px 9px; font-size: 11px; font-weight: 600; }
+.bo-prog.on { background: #dcfce7; color: #166534; }
+.bo-prog.off { background: #f1f5f9; color: #94a3b8; }
+.bo-econ { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 8px 10px; }
+.bo-econ-grid { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: 12px; }
+.bo-econ-grid span { color: #52606d; }
+.bo-econ-grid b { text-align: right; color: #0c4a6e; }
+.bo-alts li { margin: 3px 0; }
+.bo-altscore { background: #0ea5e9; color: #fff; border-radius: 8px; padding: 0 6px; font-size: 11px; font-weight: 700; }
+.bo-chk li { margin: 3px 0; }
+.bo-aviso { border-top: 1px solid #eef1f4; padding-top: 6px; margin-top: 8px; }
+#bo-save, #bo-print { background: #0ea5e9; }
+
+/* Mapa de bolhas da cidade */
+#bolhas-map-bar { margin: 8px 0; }
+#btn-bolhas-map { background: #0ea5e9; }
+#bolhas-summary { margin: 6px 0 10px; }
+ul.bo-legend { list-style: none; padding: 0; font-size: 12px; margin: 4px 0; }
+ul.bo-legend li { display: flex; align-items: center; gap: 6px; margin: 3px 0; color: #334155; }
+ul.bo-legend i { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+#bolhas-summary h3 { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+#bolhas-map-off { width: auto; padding: 4px 10px; font-size: 11px; }
 
 /* Consultas públicas na ficha (endereço, CNPJ, processos) */
 .reg-box { background: #f0f4f8; border-radius: 6px; padding: 8px; margin: 6px 0; font-size: 12px; }

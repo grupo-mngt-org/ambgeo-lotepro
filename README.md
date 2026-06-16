@@ -24,6 +24,37 @@ Inspirada no know-how da AmbGEO.
    casas, densidade e aproveitamento a cada ajuste. O estudo é salvo na ficha
    do lote e o nº de casas sai nos exports.
 
+## 🫧 Motor de Bolhas (IA) — qual *Bolha Incrível* desenvolver
+
+Inspirado no **Plano Incrível** da Área Incrível, o sistema vai além de "achar e
+pontuar terreno": ao clicar em **Analisar bolha (IA)** num lote, a IA lê as
+variáveis já medidas (área, declividade, testada, formato, infraestrutura e
+acesso do entorno) + o endereço oficial e devolve, em segundos, o estudo que
+hoje uma equipe monta à mão:
+
+- **Qual bolha** da prateleira desenvolver ali (Conquista · Conforto · Detalhe ·
+  Estilo · +Vida) + arquétipo (ex.: *Detalhe Santorini*, *+Vida Vila de Bem-estar*);
+- **Score de aplicabilidade 0–100** do produto àquele contexto;
+- a **caixa de produto**: público-alvo, faixa MCMV (2026), promessa, narrativa,
+  módulos reutilizáveis, programas acopláveis (Área Segura / Arte Incrível),
+  riscos e próximos passos;
+- **viabilidade econômica**: faixa MCMV → teto/preço-alvo por unidade, nº de
+  unidades (do Estudo de Implantação salvo), **VGV** e custo-alvo de margem;
+- **bolhas alternativas** e a justificativa amarrada às variáveis.
+
+O estudo é salvo na ficha, sai num **Dossiê imprimível (PDF)** para o comitê e
+entra nos exports. No modo cidade, **🫧 Mapa de bolhas** colore os lotes pela
+linha de produto recomendada (cálculo determinístico) — visão de banco de terrenos.
+
+> **Resiliência:** a IA roda via **OpenRouter** com *fallback entre modelos*
+> (`open_router_model{,2,3}`). Se nenhum modelo responder, o estudo cai para um
+> ranking **determinístico** (regras de aderência), nunca quebra. Honestidade do
+> método: automatiza a triagem de produto — não substitui comitê, due diligence
+> nem orçamento real.
+
+Configuração no `.env`: `open_router_key`, `open_router_model`,
+`open_router_model2`, `open_router_model3`.
+
 ## Score de viabilidade por finalidade
 
 Cada lote detectado recebe um **score 0–100 (nota A–D)** calculado por perfil de compra:
@@ -133,6 +164,9 @@ Regras de negócio editáveis (RF03): **área mínima** (default 500 m²) e **oc
 | GET | `/api/jobs/{id}` &nbsp;— progresso/resultado do job |
 | POST | `/api/analyze` &nbsp;— análise síncrona (scripts/compatibilidade) |
 | POST | `/api/layout/preview` &nbsp;— **estudo de implantação** (estilo TestFit) em tempo real |
+| GET | `/api/bolhas` &nbsp;— catálogo da prateleira (linhas, arquétipos, faixas MCMV) |
+| POST | `/api/bolha/analyze` &nbsp;— **Motor de Bolhas (IA)**: inicia o estudo (job) → `{job_id}` |
+| GET | `/api/projects/{id}/bolhas-map` &nbsp;— mapa de bolhas da cidade (determinístico) |
 | PATCH | `/api/projects/{id}/lots/{lot}` &nbsp;— ficha do lote (matrícula, status, **layout salvo**) |
 | GET / POST | `/api/projects` |
 | POST | `/api/projects/{id}/source/osm` &nbsp;— busca dados reais (cidade + endereço + raio) |
@@ -161,7 +195,9 @@ Sem credenciais, o provider `gee` retorna erro explicativo e o `footprint` segue
 ## Configuração (variáveis de ambiente)
 
 Veja [`.env.example`](.env.example). Principais: `LOTEPRO_USER`, `LOTEPRO_PASSWORD`,
-`LOTEPRO_SECRET`, `LOTEPRO_DATA_DIR`.
+`LOTEPRO_SECRET`, `LOTEPRO_DATA_DIR`. Para o **Motor de Bolhas (IA)**:
+`open_router_key` + `open_router_model`/`open_router_model2`/`open_router_model3`
+(o `.env` é carregado automaticamente; sem chave, o estudo roda em modo determinístico).
 
 ## Roadmap (fora do MVP)
 

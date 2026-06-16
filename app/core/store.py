@@ -84,7 +84,8 @@ def load_layer(project_id: str, kind: str) -> gpd.GeoDataFrame | None:
 # consulta o cartório/prefeitura e registra aqui o resultado e o andamento.
 # ---------------------------------------------------------------------------
 LOT_STATUSES = ["novo", "analisando", "contato_feito", "negociando", "descartado", "comprado"]
-LOT_FIELDS = {"matricula", "inscricao", "proprietario", "contato", "status", "notas", "layout"}
+LOT_FIELDS = {"matricula", "inscricao", "proprietario", "contato", "status", "notas",
+              "layout", "bolha"}
 
 
 def _lots_file(project_id: str) -> Path:
@@ -112,7 +113,7 @@ def set_lot_info(project_id: str, lot_id: str, fields: dict) -> dict:
             continue
         if k == "status" and v and v not in LOT_STATUSES:
             raise ValueError(f"Status inválido: {v!r}. Use {LOT_STATUSES}.")
-        if k == "layout":  # estudo de implantação salvo: dict {params, stats}
+        if k in ("layout", "bolha"):  # dicts: estudo de implantação / estudo de bolha
             entry[k] = v if isinstance(v, dict) else None
             continue
         entry[k] = (str(v).strip() if v is not None else "")

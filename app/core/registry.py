@@ -19,8 +19,10 @@ Limites legais (LGPD/cartórios) — explicitados na interface:
 """
 from __future__ import annotations
 
+import http.cookiejar
 import json
 import re
+import ssl
 import threading
 import time
 import urllib.error
@@ -29,6 +31,9 @@ import urllib.request
 from functools import lru_cache
 
 USER_AGENT = "LotePro/0.2 (devs@grupomngt.com.br)"
+# SICAR rejeita UA não-navegador (302); usamos um UA de browser só p/ essa fonte.
+BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse"
 BRASILAPI_CNPJ_URL = "https://brasilapi.com.br/api/cnpj/v1/{cnpj}"
@@ -242,3 +247,102 @@ def processo_by_numero(numero: str, uf: str) -> dict:
     return {"processos": found,
             "aviso": ("Dataset público do CNJ não inclui nome das partes (LGPD); "
                       "para buscar POR NOME use o site do tribunal.")}
+
+
+# ----------------------------------------------------------------------------
+# Imóvel rural no CAR (SICAR — consulta pública) por ponto lat/lon
+# ----------------------------------------------------------------------------
+# A API só responde com cookie de sessão (PLAY_SESSION). Fazemos o bootstrap
+# uma vez (GET no índice), reusamos a sessão e cacheamos por ponto.
+SICAR_INDEX = "https://consultapublica.car.gov.br/publico/imoveis/index"
+SICAR_GET = "https://consultapublica.car.gov.br/publico/imoveis/getImovel"
+
+_CAR_STATUS = {"AT": "Ativo", "PE": "Pendente", "SU": "Suspenso",
+               "CA": "Cancelado", "EM": "Em análise"}
+_CAR_TIPO = {"IRU": "Imóvel Rural", "AST": "Assentamento",
+             "PCT": "Território de Povos e Comunidades Tradicionais"}
+
+_car_lock = threading.Lock()
+_car_opener = None
+_car_session_ts = 0.0
+_car_cache: dict[tuple[float, float], dict] = {}
+
+
+def _sicar_ssl_context():
+    """Contexto TLS aceito pelo WAF do SICAR.
+
+    O urllib padrão leva SSLV3_ALERT_HANDSHAKE_FAILURE (o servidor recusa o
+    fingerprint TLS do Python); baixar o SECLEVEL para 1 amplia a lista de
+    cifras/curvas oferecidas e o handshake passa.
+    """
+    ctx = ssl.create_default_context()
+    try:
+        ctx.set_ciphers("DEFAULT@SECLEVEL=1")
+    except ssl.SSLError:
+        pass
+    return ctx
+
+
+def _car_session():
+    """Opener com cookie de sessão do SICAR (renovado a cada ~10 min)."""
+    global _car_opener, _car_session_ts
+    with _car_lock:
+        if _car_opener is None or (time.monotonic() - _car_session_ts) > 600:
+            jar = http.cookiejar.CookieJar()
+            opener = urllib.request.build_opener(
+                urllib.request.HTTPSHandler(context=_sicar_ssl_context()),
+                urllib.request.HTTPCookieProcessor(jar))
+            try:  # o GET no índice 302/500 mas seta o PLAY_SESSION no jar
+                opener.open(urllib.request.Request(
+                    SICAR_INDEX, headers={"User-Agent": BROWSER_UA}), timeout=20).read()
+            except Exception:
+                pass
+            _car_opener = opener
+            _car_session_ts = time.monotonic()
+        return _car_opener
+
+
+def car_imovel(lat: float, lon: float) -> dict:
+    """Imóvel rural do CAR que contém o ponto (SICAR consulta pública).
+
+    Retorna {found, codigo, area_ha, status_label, tipo_label, municipio,
+    data_*, url, geometry} — ou {found: False} se o ponto não cai num imóvel
+    cadastrado (típico em área urbana) ou o serviço estiver fora.
+    """
+    key = (round(lat, 5), round(lon, 5))
+    if key in _car_cache:
+        return _car_cache[key]
+
+    result: dict = {"found": False}
+    try:
+        opener = _car_session()
+        q = urllib.parse.urlencode({"lat": f"{lat:.10f}", "lng": f"{lon:.10f}"})
+        req = urllib.request.Request(
+            f"{SICAR_GET}?{q}",
+            headers={"Accept": "application/json", "User-Agent": BROWSER_UA,
+                     "X-Requested-With": "XMLHttpRequest", "Referer": SICAR_INDEX})
+        data = json.loads(opener.open(req, timeout=25).read())
+        feats = data.get("features") or []
+        if feats:
+            p = feats[0].get("properties") or {}
+            codigo = p.get("codigo")
+            result = {
+                "found": True,
+                "codigo": codigo,
+                "area_ha": p.get("area"),
+                "status": p.get("status"),
+                "status_label": _CAR_STATUS.get(p.get("status"), p.get("status")),
+                "tipo": p.get("tipo"),
+                "tipo_label": _CAR_TIPO.get(p.get("tipo"), p.get("tipo")),
+                "municipio": p.get("municipio"),
+                "categoria": p.get("categoria"),
+                "data_disponibilizacao": p.get("dataDisponibilizacao"),
+                "data_criacao": (p.get("dataCriacao") or "")[:10] or None,
+                "url": f"https://car.gov.br/#/consultar/{codigo}" if codigo else None,
+                "geometry": feats[0].get("geometry"),
+            }
+    except Exception:
+        pass
+
+    _car_cache[key] = result
+    return result
