@@ -107,6 +107,64 @@ CSV/Excel/KML.
 Tudo no caminho default roda **com dados reais e sem API key**. O Google Earth Engine é um
 provider **opcional e plugável** (índices NDVI/NDBI sobre Sentinel-2).
 
+## Deploy em Produção (Render)
+
+O sistema está hospedado em: **https://ambgeo-lotepro.onrender.com**
+
+| Campo | Valor |
+|-------|-------|
+| URL | https://ambgeo-lotepro.onrender.com |
+| Usuário | `admin` |
+| Senha | `u9epGTVQLv5cDzQfsUZfPLDKG8fXgyuANr3eKxsbUo0=` |
+| Dashboard Render | https://dashboard.render.com/web/srv-d8opgatckfvc7380go7g |
+
+> Plano free: dorme após 15 min de inatividade — primeiro acesso após o sono demora ~30s.
+> Dados de projetos são **efêmeros** (ficam em `/tmp` e resetam no restart).
+> Para persistência real: ativar disco no Render ($7/mês) ou migrar storage para Supabase.
+
+### Redesployar / Novo deploy
+
+O repo já tem `render.yaml` + `Dockerfile`. Para criar um novo serviço do zero via API:
+
+```bash
+# 1. Pegar o owner ID da conta Render
+curl -H "Authorization: Bearer <RENDER_API_KEY>" https://api.render.com/v1/owners
+
+# 2. Criar o serviço (Docker, plano free, branch develop)
+curl -X POST https://api.render.com/v1/services \
+  -H "Authorization: Bearer <RENDER_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "autoDeploy": "yes",
+    "branch": "develop",
+    "name": "ambgeo-lotepro",
+    "ownerId": "<OWNER_ID>",
+    "repo": "https://github.com/grupo-mngt-org/ambgeo-lotepro",
+    "type": "web_service",
+    "serviceDetails": {
+      "dockerfilePath": "./Dockerfile",
+      "env": "docker",
+      "plan": "free",
+      "region": "ohio"
+    },
+    "envVars": [
+      {"key": "LOTEPRO_USER",     "value": "admin"},
+      {"key": "LOTEPRO_PASSWORD", "generateValue": true},
+      {"key": "LOTEPRO_SECRET",   "generateValue": true},
+      {"key": "LOTEPRO_DATA_DIR", "value": "/tmp/lotepro-data"},
+      {"key": "open_router_key",   "value": "<OPENROUTER_KEY>"},
+      {"key": "open_router_model", "value": "nvidia/nemotron-3-ultra-550b-a55b:free"},
+      {"key": "open_router_model2","value": "nex-agi/nex-n2-pro:free"},
+      {"key": "open_router_model3","value": "poolside/laguna-m.1:free"}
+    ]
+  }'
+```
+
+> **Nota:** o repo GitHub precisa ser **público** para o Render acessar sem OAuth.
+> As chaves ficam em `infra_envs` (interno Grupo MNGT).
+
+---
+
 ## Como rodar
 
 ```bash
