@@ -22,16 +22,6 @@ def _unb64(data: str) -> bytes:
     return base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))
 
 
-def hash_password(password: str) -> str:
-    return hashlib.pbkdf2_hmac("sha256", password.encode(), config.SECRET_KEY.encode(), 100_000).hex()
-
-
-def verify_credentials(username: str, password: str) -> bool:
-    return hmac.compare_digest(username, config.AUTH_USER) and hmac.compare_digest(
-        password, config.AUTH_PASSWORD
-    )
-
-
 def create_token(username: str) -> str:
     payload = {"sub": username, "exp": int(time.time()) + config.TOKEN_TTL_SECONDS}
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
