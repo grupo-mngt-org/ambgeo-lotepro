@@ -1,0 +1,26 @@
+[project]
+name = "ambgeo-lotepro"
+version = "0.2.0"
+description = "Lote Pro — prospecção inteligente de áreas (terrenos vazios/subutilizados)."
+requires-python = ">=3.12"
+dependencies = [
+    # API
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    # Geoprocessamento (núcleo). NÃO usar fiona (sem wheel p/ 3.14 no Windows);
+    # I/O vetorial via pyogrio (GDAL embutido no wheel).
+    "geopandas>=1.1",
+    "shapely>=2.1",
+    "pyproj>=3.7",
+    "pyogrio>=0.10",
+    # Dados REAIS via OSM (Nominatim/Overpass) e Overture (DuckDB)
+    "osmnx>=2.1",
+    "duckdb>=1.3",
+    # Exportação
+    "simplekml>=1.3",
+    "openpyxl>=3.1",
+    # Config + Postgres (prontos para a Fase 2)
+    "pydantic-settings>=2.0",
+    "psycopg2-binary>=2.9",
+]

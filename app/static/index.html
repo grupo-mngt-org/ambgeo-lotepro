@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lote Pro — Prospecção Inteligente de Áreas</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+  <header>
+    <strong>Lote Pro</strong> <span class="muted">Prospecção Inteligente de Áreas</span>
+    <span id="who" class="muted right"></span>
+  </header>
+
+  <div id="app">
+    <aside id="panel">
+      <!-- Login -->
+      <section id="login">
+        <h3>Acesso</h3>
+        <input id="user" placeholder="usuário" value="admin" />
+        <input id="pass" type="password" placeholder="senha" value="lotepro" />
+        <button id="btn-login">Entrar</button>
+        <p class="hint">Padrão dev: admin / lotepro</p>
+      </section>
+
+      <!-- Fluxo principal -->
+      <section id="work" class="hidden">
+        <div class="tabs">
+          <button id="tab-city" class="tab active">🏙️ Cidade inteira</button>
+          <button id="tab-radius" class="tab">📍 Endereço + raio</button>
+        </div>
+
+        <h3 id="search-title">Qual cidade você quer prospectar?</h3>
+        <div class="search-wrap">
+          <input id="search" autocomplete="off" placeholder="Digite o nome da cidade…" />
+          <ul id="suggest" class="hidden"></ul>
+        </div>
+        <div id="radius-wrap" class="hidden">
+          <label>Raio de análise (m)
+            <input id="adv-radius" type="number" value="500" min="50" max="5000" /></label>
+        </div>
+
+        <h3>Qual a finalidade da compra?</h3>
+        <select id="profile"></select>
+        <p id="profile-desc" class="hint"></p>
+        <div class="row">
+          <label>Metragem mín. (m²)<input id="target-min" type="number" min="0" step="100" /></label>
+          <label>Metragem máx. (m²)<input id="target-max" type="number" min="0" step="100" /></label>
+        </div>
+
+        <button id="btn-analyze">Analisar cidade inteira</button>
+        <p id="first-run-hint" class="hint">A 1ª análise de uma região baixa os footprints
+          de edificações (Microsoft) — pode levar alguns minutos; depois fica em cache.</p>
+
+        <button id="btn-pick" class="secondary">📍 Estudar um terreno (clique / desenho)</button>
+        <p id="pick-hint" class="hint hidden">Modo seleção ativo: <b>clique</b> num ponto
+          (usa o imóvel do CAR, se houver) ou <b>arraste</b> para desenhar um retângulo.
+          Esc cancela.</p>
+
+        <!-- Progresso do job -->
+        <div id="progress" class="hidden">
+          <div class="pg-bar"><i id="pg-fill"></i></div>
+          <div class="pg-row"><span id="pg-stage"></span><span id="pg-pct"></span></div>
+          <div id="pg-detail" class="hint"></div>
+        </div>
+        <div id="msg"></div>
+
+        <!-- Relatório (preenchido após a análise) -->
+        <div id="report" class="hidden"></div>
+
+        <!-- Mapa de bolhas da cidade (Motor de Bolhas — determinístico) -->
+        <div id="bolhas-map-bar" class="hidden">
+          <button id="btn-bolhas-map" class="secondary">🫧 Mapa de bolhas da cidade</button>
+        </div>
+        <div id="bolhas-summary" class="hidden"></div>
+
+        <!-- Ranking dos melhores lotes -->
+        <div id="ranking" class="hidden"></div>
+
+        <!-- Estudo de implantação (estilo TestFit) -->
+        <div id="layout-panel" class="hidden">
+          <h3>🏘️ Estudo de implantação <span id="lay-lot"></span></h3>
+          <p class="hint">Dimensione as casas no terreno em tempo real: ajuste o
+            lote-padrão, recuos e via interna — a implantação e as métricas
+            recalculam a cada movimento.</p>
+          <div id="lay-stats" class="lay-stats"></div>
+
+          <label>Testada do lote <span class="val" id="v-lot_width_m">8 m</span>
+            <input type="range" id="lay-lot_width_m" min="4" max="25" step="0.5" value="8"></label>
+          <label>Profundidade do lote <span class="val" id="v-lot_depth_m">20 m</span>
+            <input type="range" id="lay-lot_depth_m" min="10" max="50" step="1" value="20"></label>
+          <label>Casa — largura <span class="val" id="v-house_width_m">6 m</span>
+            <input type="range" id="lay-house_width_m" min="3" max="20" step="0.5" value="6"></label>
+          <label>Casa — profundidade <span class="val" id="v-house_depth_m">10 m</span>
+            <input type="range" id="lay-house_depth_m" min="3" max="30" step="0.5" value="10"></label>
+          <label>Recuo frontal <span class="val" id="v-front_setback_m">3 m</span>
+            <input type="range" id="lay-front_setback_m" min="0" max="10" step="0.5" value="3"></label>
+          <label>Recuo lateral <span class="val" id="v-side_setback_m">1.5 m</span>
+            <input type="range" id="lay-side_setback_m" min="0" max="5" step="0.5" value="1.5"></label>
+          <label>Recuo de fundos <span class="val" id="v-back_setback_m">2 m</span>
+            <input type="range" id="lay-back_setback_m" min="0" max="10" step="0.5" value="2"></label>
+          <label>Via interna <span class="val" id="v-road_width_m">8 m</span>
+            <input type="range" id="lay-road_width_m" min="5" max="16" step="0.5" value="8"></label>
+          <label>Margem do perímetro <span class="val" id="v-perimeter_margin_m">2 m</span>
+            <input type="range" id="lay-perimeter_margin_m" min="0" max="10" step="0.5" value="2"></label>
+          <label class="chk"><input type="checkbox" id="lay-auto-angle" checked />
+            Orientação automática (maior lado do terreno)</label>
+          <label>Ângulo das fileiras <span class="val" id="v-angle_deg">0°</span>
+            <input type="range" id="lay-angle_deg" min="-90" max="90" step="1" value="0" disabled></label>
+
+          <div class="row">
+            <button id="lay-save">💾 Salvar estudo</button>
+            <button id="lay-close" class="secondary">Fechar</button>
+          </div>
+          <div id="lay-msg" class="hint"></div>
+        </div>
+
+        <!-- Estudo de Bolha (Motor de Bolhas — IA) -->
+        <div id="bolha-panel" class="hidden">
+          <h3>🫧 Estudo de bolha <span id="bo-lot"></span></h3>
+          <p class="hint">Qual <b>Bolha Incrível</b> desenvolver neste terreno — recomendação,
+            score de aplicabilidade e a caixa de produto, geradas por IA a partir do contexto.</p>
+          <label>Faixa MCMV alvo (opcional)
+            <select id="bo-faixa">
+              <option value="">IA infere pelo contexto</option>
+              <option value="1">Faixa 1 (até R$ 3.200)</option>
+              <option value="2">Faixa 2 (até R$ 5.000)</option>
+              <option value="3">Faixa 3 (até R$ 9.600 · teto 400k)</option>
+              <option value="4">Faixa 4 (até R$ 13.000 · teto 600k)</option>
+            </select>
+          </label>
+          <button id="bo-run">⚡ Analisar bolha</button>
+          <!-- Progresso do job de IA -->
+          <div id="bo-progress" class="hidden">
+            <div class="pg-bar"><i id="bo-fill"></i></div>
+            <div class="pg-row"><span id="bo-stage"></span><span id="bo-pct"></span></div>
+          </div>
+          <div id="bo-result"></div>
+          <div class="row">
+            <button id="bo-save" class="secondary hidden">💾 Salvar na ficha</button>
+            <button id="bo-print" class="secondary hidden">🖨️ Dossiê</button>
+            <button id="bo-close" class="secondary">Fechar</button>
+          </div>
+          <div id="bo-msg" class="hint"></div>
+        </div>
+
+        <!-- Ficha do lote (CRM de prospecção) -->
+        <div id="ficha" class="hidden">
+          <h3>📋 Ficha do lote <span id="ficha-lot"></span></h3>
+
+          <!-- Consulta pública automática: endereço oficial + links -->
+          <div id="fi-registry" class="reg-box">Consultando endereço oficial…</div>
+          <div id="ficha-links" class="ficha-links"></div>
+
+          <!-- Imóvel rural no CAR (SICAR — dados em tela) -->
+          <div id="fi-car" class="reg-box">🌳 Consultando CAR (imóvel rural)…</div>
+
+          <!-- Proprietário PJ: CNPJ → Receita Federal (BrasilAPI) -->
+          <div class="reg-box">
+            <h4>🏢 Proprietário pessoa jurídica (CNPJ)</h4>
+            <div class="row">
+              <input id="fi-cnpj" placeholder="CNPJ do proprietário (14 dígitos)" />
+              <button id="fi-cnpj-go" class="secondary">Consultar</button>
+            </div>
+            <div id="fi-cnpj-out" class="reg-out"></div>
+          </div>
+
+          <!-- Processos: nº CNJ → DataJud -->
+          <div class="reg-box">
+            <h4>⚖️ Processos judiciais</h4>
+            <div class="row">
+              <input id="fi-proc" placeholder="nº do processo CNJ (20 dígitos)" />
+              <button id="fi-proc-go" class="secondary">Consultar</button>
+            </div>
+            <div id="fi-proc-out" class="reg-out"></div>
+            <div id="fi-proc-links" class="ficha-links"></div>
+          </div>
+
+          <label>Matrícula (cartório)<input id="fi-matricula" placeholder="ex.: 123.456 — 2º CRI" /></label>
+          <label>Inscrição imobiliária (IPTU)<input id="fi-inscricao" placeholder="ex.: 01.234.567-8" /></label>
+          <label>Proprietário<input id="fi-proprietario" placeholder="nome registrado" /></label>
+          <label>Contato<input id="fi-contato" placeholder="telefone / e-mail" /></label>
+          <label>Status
+            <select id="fi-status">
+              <option value="novo">Novo</option>
+              <option value="analisando">Analisando</option>
+              <option value="contato_feito">Contato feito</option>
+              <option value="negociando">Negociando</option>
+              <option value="descartado">Descartado</option>
+              <option value="comprado">Comprado</option>
+            </select>
+          </label>
+          <label>Notas<textarea id="fi-notas" rows="3" placeholder="observações da visita, preço pedido…"></textarea></label>
+          <div class="row">
+            <button id="fi-save">Salvar ficha</button>
+            <button id="fi-close" class="secondary">Fechar</button>
+          </div>
+          <button id="fi-layout" class="secondary">🏘️ Abrir estudo de implantação</button>
+          <div id="fi-msg" class="hint"></div>
+        </div>
+
+        <!-- Configurações avançadas -->
+        <details id="advanced">
+          <summary>Configurações avançadas</summary>
+          <label>Fonte de edificações
+            <select id="adv-buildings-src">
+              <option value="auto">Automática — Microsoft + OSM (recomendado)</option>
+              <option value="ms">Microsoft Building Footprints</option>
+              <option value="osm">OSM (rápido, cobertura parcial)</option>
+              <option value="overture">Overture Maps (cobertura alta — lento)</option>
+              <option value="google">Google Open Buildings via GEE (credenciais)</option>
+            </select>
+          </label>
+          <label>Motor de detecção
+            <select id="adv-provider">
+              <option value="footprint">Footprint (local, sem chave)</option>
+              <option value="dynamic_world">Dynamic World — GEE (uso do solo semanal, requer credenciais)</option>
+              <option value="gee">GEE — Sentinel-2 NDVI/NDBI (requer credenciais)</option>
+            </select>
+          </label>
+          <div id="gee-tip" class="gee-note hidden">
+            <strong>Credenciais GEE necessárias.</strong>
+            Configure <code>GEE_SERVICE_ACCOUNT</code> + <code>GEE_KEY_FILE</code> no <code>.env</code>
+            ou rode <code>earthengine authenticate</code> no terminal.<br>
+            <span class="combo-rec">★ Combinação recomendada: <strong>Dynamic World</strong> + fonte <strong>Google Open Buildings</strong>.</span>
+          </div>
+          <label>Área mínima (m²)<input id="adv-min-area" type="number" value="300" /></label>
+          <label>Área máxima (ha) — modo cidade<input id="adv-max-area-ha" type="number" value="200" /></label>
+          <label>Ocupação máxima (%)<input id="adv-max-occ" type="number" value="30" /></label>
+          <label>Largura mínima do vazio (m)<input id="adv-min-width" type="number" value="6" step="0.5" /></label>
+          <label>Folga em torno das edificações (m)<input id="adv-bbuffer" type="number" value="1.5" step="0.5" /></label>
+
+          <h4>Zoneamento (opcional)</h4>
+          <label>Enviar zoneamento (SHP/KML/GeoJSON)
+            <input type="file" id="f-zoning" accept=".geojson,.json,.kml,.zip" /></label>
+          <button id="btn-reanalyze" class="secondary">Reanalisar com dados atuais</button>
+
+          <h4>Exportar leads</h4>
+          <div class="row">
+            <button class="exp secondary" data-fmt="csv">CSV</button>
+            <button class="exp secondary" data-fmt="xlsx">Excel</button>
+            <button class="exp secondary" data-fmt="kml">KML</button>
+          </div>
+        </details>
+      </section>
+    </aside>
+    <div id="map"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
