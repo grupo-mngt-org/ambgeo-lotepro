@@ -7,3 +7,5 @@ data/cache/
 cache/
 .pytest_cache/
 *.gpkg
+
+.idea/

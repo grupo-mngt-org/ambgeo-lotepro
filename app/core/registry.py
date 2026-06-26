@@ -30,6 +30,8 @@ import urllib.parse
 import urllib.request
 from functools import lru_cache
 
+from .. import config
+
 USER_AGENT = "LotePro/0.2 (devs@grupomngt.com.br)"
 # SICAR rejeita UA não-navegador (302); usamos um UA de browser só p/ essa fonte.
 BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -38,9 +40,9 @@ BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse"
 BRASILAPI_CNPJ_URL = "https://brasilapi.com.br/api/cnpj/v1/{cnpj}"
 DATAJUD_URL = "https://api-publica.datajud.cnj.jus.br/api_publica_{alias}/_search"
-# Chave PÚBLICA da API do DataJud, publicada pelo próprio CNJ em
-# https://datajud-wiki.cnj.jus.br/api-publica/acesso (igual para todos).
-DATAJUD_PUBLIC_KEY = "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=="
+# Chave PÚBLICA da API do DataJud (CNJ), agora em config/.env (DATAJUD_API_KEY).
+# Documentada em https://datajud-wiki.cnj.jus.br/api-publica/acesso (igual p/ todos).
+DATAJUD_PUBLIC_KEY = config.DATAJUD_API_KEY
 
 # Tribunal de Justiça estadual por UF (alias do índice público do DataJud).
 UF_TJ_ALIAS = {

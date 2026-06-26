@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import ssl
 import sys
 import urllib.request
@@ -53,8 +54,8 @@ show("INCRA i3geo WFS GetFeature GeoJSON (SSL off)", lambda: get(
     f"&typename=certificada_sigef&bbox={bbox}&outputformat=GeoJSON",
     timeout=90))
 
-# DataJud com timeout maior
-DATAJUD_KEY = "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=="
+# DataJud com timeout maior (chave publica; override via DATAJUD_API_KEY)
+DATAJUD_KEY = os.getenv("DATAJUD_API_KEY", "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==")
 show("DataJud TJGO match_all (90s)", lambda: get(
     "https://api-publica.datajud.cnj.jus.br/api_publica_tjgo/_search",
     headers={"Authorization": f"APIKey {DATAJUD_KEY}"},

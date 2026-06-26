@@ -1,78 +1,112 @@
-"""Configuração via variáveis de ambiente (com defaults para desenvolvimento)."""
+"""Configuração via pydantic-settings (.env + variáveis de ambiente).
+
+Substitui o loader `.env` caseiro. A superfície pública de módulo
+(`config.DATA_DIR`, `config.OPENROUTER_MODELS`, `config.AUTH_USER`, …) é
+preservada como aliases sobre `settings`, para não tocar nos consumidores
+(`app/core/*.py` fazem `from .. import config`).
+"""
 from __future__ import annotations
 
-import os
 from pathlib import Path
+
+from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-def _load_dotenv(path: Path) -> None:
-    """Carrega o .env para os.environ (sem dependência externa).
+class Settings(BaseSettings):
+    """Configurações da aplicação. Variáveis reais do SO têm prioridade sobre o .env."""
 
-    Só define chaves AINDA não presentes no ambiente — variáveis reais do SO
-    (ex.: em produção/Render) têm prioridade sobre o arquivo.
-    """
-    if not path.is_file():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, val = line.split("=", 1)
-        os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
+    model_config = SettingsConfigDict(
+        env_file=BASE_DIR / ".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # Persistência (filesystem hoje; DB vem na Fase 2)
+    data_dir: Path = Field(default=BASE_DIR / "data", validation_alias="LOTEPRO_DATA_DIR")
+
+    # Autenticação single-user (RNF03)
+    auth_user: str = Field("admin", validation_alias="LOTEPRO_USER")
+    auth_password: str = Field("lotepro", validation_alias="LOTEPRO_PASSWORD")
+    secret_key: str = Field("dev-secret-troque-em-producao", validation_alias="LOTEPRO_SECRET")
+    token_ttl_seconds: int = Field(28800, validation_alias="LOTEPRO_TOKEN_TTL")  # 8h
+
+    # Banco de dados — pronto para a Fase 2 (vazio = sem DB, persistência em arquivo)
+    database_url: str = Field("", validation_alias="DATABASE_URL")
+
+    # DataJud (CNJ) — chave PÚBLICA documentada pelo CNJ (igual para todos,
+    # https://datajud-wiki.cnj.jus.br/api-publica/acesso). NÃO é segredo; fica
+    # aqui só para configurabilidade/DRY (override via DATAJUD_API_KEY).
+    datajud_api_key: str = Field(
+        "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==",
+        validation_alias="DATAJUD_API_KEY",
+    )
+
+    # IA — OpenRouter (Motor de Bolhas). Aceita nomes minúsculos (do .env do
+    # projeto) e MAIÚSCULOS (ambiente do SO).
+    openrouter_key: str = Field(
+        "", validation_alias=AliasChoices("OPENROUTER_KEY", "open_router_key")
+    )
+    openrouter_url: str = Field(
+        "https://openrouter.ai/api/v1/chat/completions",
+        validation_alias=AliasChoices("OPENROUTER_URL", "open_router_url"),
+    )
+    # Timeout (s) do ÚLTIMO modelo da cadeia (o pago/garantido) — generoso.
+    openrouter_timeout: float = Field(180, validation_alias="OPENROUTER_TIMEOUT")
+    # Timeout (s) por modelo NÃO-final (free): rotaciona se estourar.
+    openrouter_free_timeout: float = Field(40, validation_alias="OPENROUTER_FREE_TIMEOUT")
+    # Prazo TOTAL da cadeia; esgotado, cai p/ o estudo determinístico.
+    openrouter_deadline: float = Field(360, validation_alias="OPENROUTER_DEADLINE")
+
+    # Modelos na ORDEM de fallback: open_router_model, _model2, … _model8.
+    # A ordem É a prioridade: free primeiro, pago (garantido) por último.
+    openrouter_model: str = Field("", validation_alias=AliasChoices("OPENROUTER_MODEL", "open_router_model"))
+    openrouter_model2: str = Field("", validation_alias=AliasChoices("OPENROUTER_MODEL2", "open_router_model2"))
+    openrouter_model3: str = Field("", validation_alias=AliasChoices("OPENROUTER_MODEL3", "open_router_model3"))
+    openrouter_model4: str = Field("", validation_alias=AliasChoices("OPENROUTER_MODEL4", "open_router_model4"))
+    openrouter_model5: str = Field("", validation_alias=AliasChoices("OPENROUTER_MODEL5", "open_router_model5"))
+    openrouter_model6: str = Field("", validation_alias=AliasChoices("OPENROUTER_MODEL6", "open_router_model6"))
+    openrouter_model7: str = Field("", validation_alias=AliasChoices("OPENROUTER_MODEL7", "open_router_model7"))
+    openrouter_model8: str = Field("", validation_alias=AliasChoices("OPENROUTER_MODEL8", "open_router_model8"))
+
+    @property
+    def openrouter_models(self) -> list[str]:
+        out: list[str] = []
+        for v in (
+            self.openrouter_model, self.openrouter_model2, self.openrouter_model3,
+            self.openrouter_model4, self.openrouter_model5, self.openrouter_model6,
+            self.openrouter_model7, self.openrouter_model8,
+        ):
+            if v and v not in out:
+                out.append(v)
+        return out
 
 
-_load_dotenv(BASE_DIR / ".env")
+settings = Settings()
 
-DATA_DIR = Path(os.getenv("LOTEPRO_DATA_DIR", BASE_DIR / "data"))
+# ---------------------------------------------------------------------------
+# Aliases de módulo — compat com consumidores existentes (`config.X`).
+# ---------------------------------------------------------------------------
+DATA_DIR = settings.data_dir
 PROJECTS_DIR = DATA_DIR / "projects"
 
-# Autenticação (RNF03). Em produção, defina via ambiente.
-AUTH_USER = os.getenv("LOTEPRO_USER", "admin")
-AUTH_PASSWORD = os.getenv("LOTEPRO_PASSWORD", "lotepro")
-SECRET_KEY = os.getenv("LOTEPRO_SECRET", "dev-secret-troque-em-producao")
-TOKEN_TTL_SECONDS = int(os.getenv("LOTEPRO_TOKEN_TTL", "28800"))  # 8h
+AUTH_USER = settings.auth_user
+AUTH_PASSWORD = settings.auth_password
+SECRET_KEY = settings.secret_key
+TOKEN_TTL_SECONDS = settings.token_ttl_seconds
 
-# ---------------------------------------------------------------------------
-# IA — OpenRouter (Motor de Bolhas). Chave + modelos vêm do .env. Os nomes
-# minúsculos (open_router_*) são os usados no .env do projeto; aceitamos também
-# os equivalentes MAIÚSCULOS caso definidos no ambiente do SO.
-# ---------------------------------------------------------------------------
-def _env(*names: str, default: str = "") -> str:
-    for n in names:
-        v = os.getenv(n)
-        if v:
-            return v
-    return default
+DATABASE_URL = settings.database_url
 
+DATAJUD_API_KEY = settings.datajud_api_key
 
-OPENROUTER_KEY = _env("OPENROUTER_KEY", "open_router_key")
-
-
-def _model_list() -> list[str]:
-    """Modelos na ORDEM do .env: open_router_model, _model2, _model3, _model4…
-
-    A ordem É a prioridade de fallback: ponha os modelos free primeiro e o
-    modelo pago (garantido) por último — o sistema rotaciona até um responder.
-    """
-    out: list[str] = []
-    for suf in ("", "2", "3", "4", "5", "6", "7", "8"):
-        v = _env(f"OPENROUTER_MODEL{suf}", f"open_router_model{suf}")
-        if v and v not in out:
-            out.append(v)
-    return out
-
-
-OPENROUTER_MODELS = _model_list()
-OPENROUTER_URL = _env("OPENROUTER_URL",
-                      default="https://openrouter.ai/api/v1/chat/completions")
-# Timeout (s) do ÚLTIMO modelo da cadeia (o pago/garantido) — generoso.
-OPENROUTER_TIMEOUT = float(_env("OPENROUTER_TIMEOUT", default="180"))
-# Timeout (s) por modelo NÃO-final (free): se não devolver JSON válido nesse
-# tempo (lentidão/erro), rotaciona para o próximo. Mantém a rotação ágil.
-OPENROUTER_FREE_TIMEOUT = float(_env("OPENROUTER_FREE_TIMEOUT", default="40"))
-# Prazo TOTAL da cadeia; esgotado, cai p/ o estudo determinístico (raro c/ pago no fim).
-OPENROUTER_DEADLINE = float(_env("OPENROUTER_DEADLINE", default="360"))
+OPENROUTER_KEY = settings.openrouter_key
+OPENROUTER_MODELS = settings.openrouter_models
+OPENROUTER_URL = settings.openrouter_url
+OPENROUTER_TIMEOUT = settings.openrouter_timeout
+OPENROUTER_FREE_TIMEOUT = settings.openrouter_free_timeout
+OPENROUTER_DEADLINE = settings.openrouter_deadline
 
 PROJECTS_DIR.mkdir(parents=True, exist_ok=True)

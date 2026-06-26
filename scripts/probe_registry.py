@@ -6,6 +6,7 @@ integrar em app/core/registry.py. Ponto de teste: lote em Senador Canedo-GO.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.request
 
@@ -64,8 +65,8 @@ show("INCRA i3geo WFS GetFeature bbox", lambda: get(
     "?service=WFS&version=1.0.0&request=GetFeature&tema=certificada_sigef"
     f"&typename=certificada_sigef&bbox={bbox}&outputformat=GeoJSON"))
 
-# 5. DataJud CNJ - API publica (chave publica documentada pelo CNJ)
-DATAJUD_KEY = "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=="
+# 5. DataJud CNJ - API publica (chave publica documentada pelo CNJ; override via DATAJUD_API_KEY)
+DATAJUD_KEY = os.getenv("DATAJUD_API_KEY", "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==")
 show("DataJud TJGO match_all size=1", lambda: get(
     "https://api-publica.datajud.cnj.jus.br/api_publica_tjgo/_search",
     headers={"Authorization": f"APIKey {DATAJUD_KEY}"},

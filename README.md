@@ -168,17 +168,25 @@ curl -X POST https://api.render.com/v1/services \
 ## Como rodar
 
 ```bash
-# 1. instalar dependências (no Windows, NÃO use fiona)
-python -m pip install -r requirements.txt
+# 1. instalar dependências (uv usa Python 3.12 e o uv.lock; no Windows, NÃO use fiona)
+uv sync
 
 # 2. gerar dados de exemplo (Goiânia/GO)
-python scripts/make_sample.py
+uv run python scripts/make_sample.py
 
 # 3. subir a API + frontend
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 # 4. abrir no navegador
 #    http://127.0.0.1:8000      (login dev: admin / lotepro)
+```
+
+> No Windows, `start.bat` faz os passos 1, 3 e 4 automaticamente (duplo-clique).
+
+### Rodar com Docker (API + Postgres)
+
+```bash
+docker compose up --build       # API em http://localhost:8040, Postgres em 127.0.0.1:5436
 ```
 
 ### Fluxo no navegador (dados REAIS)

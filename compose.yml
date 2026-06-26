@@ -1,0 +1,42 @@
+services:
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lotepro}
+      POSTGRES_USER: ${POSTGRES_USER:-lotepro}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5436}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lotepro} -d ${POSTGRES_DB:-lotepro}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  app:
+    build: .
+    container_name: ambgeo-lotepro
+    ports:
+      - "${BACKEND_PORT:-8040}:8000"
+    env_file: .env
+    environment:
+      # Dados em ARQUIVO (projetos, *.gpkg, meta.json, lots.json) vivem aqui.
+      # Montado em volume nomeado → sobrevive a rebuild/restart do container.
+      LOTEPRO_DATA_DIR: /app/data
+      # Postgres sobe VAZIO nesta fase — a app ainda persiste em arquivo.
+      # DATABASE_URL fica disponível pronto para a Fase 2 (Alembic + models).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lotepro}:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@db:5432/${POSTGRES_DB:-lotepro}
+    volumes:
+      - lotepro_data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  lotepro_data:

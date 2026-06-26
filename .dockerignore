@@ -1,0 +1,19 @@
+# Dados (persistidos via volume nomeado, não na imagem)
+data/
+*.gpkg
+
+# Segredos (injetados via env_file no runtime)
+.env
+
+# Ambiente/artefatos de dev
+.venv/
+.git/
+.gitignore
+.idea/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Assets pesados não usados em runtime
+demo*.png
+docs/

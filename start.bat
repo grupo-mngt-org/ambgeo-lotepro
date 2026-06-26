@@ -7,21 +7,24 @@ echo   Lote Pro ^| Prospeccao Inteligente de Areas
 echo  =========================================
 echo.
 
-:: Verificar se Python 3.14 esta disponivel
-py -3.14 --version >nul 2>&1
+:: Verificar se o uv esta disponivel
+uv --version >nul 2>&1
 if errorlevel 1 (
-    echo [ERRO] Python 3.14 nao encontrado.
-    echo        Instale em: https://www.python.org/downloads/
+    echo [ERRO] uv nao encontrado.
+    echo        Instale em: https://docs.astral.sh/uv/getting-started/installation/
     pause
     exit /b 1
 )
 
-:: Verificar dependencias criticas
-py -3.14 -c "import fastapi, geopandas, osmnx" >nul 2>&1
+cd /d "%~dp0"
+
+:: Sincronizar dependencias (uv baixa/usa Python 3.12 via requires-python e o uv.lock)
+echo  Sincronizando dependencias (uv sync)...
+uv sync
 if errorlevel 1 (
-    echo [AVISO] Dependencias ausentes. Instalando...
-    py -3.14 -m pip install -r requirements.txt
-    echo.
+    echo [ERRO] Falha ao instalar dependencias.
+    pause
+    exit /b 1
 )
 
 :: Verificar se a porta 8000 ja esta ocupada
@@ -39,8 +42,7 @@ echo  Login padrao: admin / lotepro
 echo  Pressione Ctrl+C para encerrar.
 echo.
 
-cd /d "%~dp0"
 start "" "http://127.0.0.1:8000"
-py -3.14 -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 pause
