@@ -3,6 +3,8 @@
 > Insumo para decidir o escopo de persistência da **Fase 2** (ver `PLANO_MIGRACAO_AMBGEO_LOTEPRO.md`).
 > Levantado em 2026-06-25 a partir do código em `app/`.
 
+> ⚠️ **ATUALIZAÇÃO (2026-06-26):** a Fase 2 foi executada. A §4 abaixo descreve a persistência **original (filesystem)**. Hoje, **`projects`, `lots` (results) e CRM vivem no Postgres** (Opção A); apenas as camadas de **input** (`aoi/buildings/zoning/exclusions`) seguem em `.gpkg`. O `lot_id` agora é PK estável e o estudo de IA do Motor de Bolhas persiste em `lot_crm.bolha`. Detalhes em `FASE2_DESIGN.md`.
+
 ## 1. O que o sistema faz (em uma frase)
 
 Detecta e qualifica **lotes urbanos vazios ou subutilizados** (subtração quadra − edificações), pontua a viabilidade técnica de cada lote (0–100) com base em relevo/acesso/testada/forma/entorno, e recomenda qual **arquétipo de produto imobiliário ("Bolha", alinhado ao MCMV)** construir — via IA (OpenRouter) com fallback determinístico.
