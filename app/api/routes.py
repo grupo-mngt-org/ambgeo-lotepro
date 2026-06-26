@@ -10,6 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from shapely.geometry import shape
 
+from .. import config
 from ..core import (analysis, auth, bolhas, citywide, enrich, geo, io, jobs,
                     layout, osm, pipeline, registry, report, score, store)
 from ..providers import DetectionParams, get_provider
@@ -38,6 +39,28 @@ def login(body: LoginIn):
     if not auth.verify_credentials(body.username, body.password):
         raise HTTPException(status_code=401, detail="Usuário ou senha inválidos.")
     return {"token": auth.create_token(body.username), "user": body.username}
+
+
+@router.get("/auth/config")
+def auth_config():
+    """Config pública p/ o frontend inicializar o login Google (sem segredos)."""
+    return {"google_client_id": config.GOOGLE_CLIENT_ID}
+
+
+class GoogleLoginIn(BaseModel):
+    id_token: str
+
+
+@router.post("/auth/google")
+def google_login(body: GoogleLoginIn):
+    """Login via Google Identity Services. Recebe o id_token do frontend,
+    valida, faz upsert do usuário e emite o token da aplicação."""
+    try:
+        idinfo = auth.verify_google_token(body.id_token)
+        info = auth.upsert_google_user(idinfo)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    return {"token": auth.create_token(info["email"]), "user": info["name"]}
 
 
 # --------------------------- Projetos -------------------------------------

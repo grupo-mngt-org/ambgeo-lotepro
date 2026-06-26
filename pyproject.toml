@@ -26,4 +26,6 @@ dependencies = [
     # ORM + migrations (Fase 2)
     "sqlalchemy>=2.0",
     "alembic>=1.13",
+    # Login Google (Fase 2b)
+    "google-auth>=2.0",
 ]

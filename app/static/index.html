@@ -18,6 +18,9 @@
       <!-- Login -->
       <section id="login">
         <h3>Acesso</h3>
+        <!-- Login Google (aparece se GOOGLE_CLIENT_ID estiver configurado) -->
+        <div id="g-signin"></div>
+        <p id="g-sep" class="hint hidden">ou</p>
         <input id="user" placeholder="usuário" value="admin" />
         <input id="pass" type="password" placeholder="senha" value="lotepro" />
         <button id="btn-login">Entrar</button>
@@ -249,6 +252,7 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/app.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async></script>
+<script src="/app.js"></script>
 </body>
 </html>

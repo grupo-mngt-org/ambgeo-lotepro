@@ -34,8 +34,14 @@ class Settings(BaseSettings):
     secret_key: str = Field("dev-secret-troque-em-producao", validation_alias="LOTEPRO_SECRET")
     token_ttl_seconds: int = Field(28800, validation_alias="LOTEPRO_TOKEN_TTL")  # 8h
 
-    # Banco de dados — pronto para a Fase 2 (vazio = sem DB, persistência em arquivo)
+    # Banco de dados
     database_url: str = Field("", validation_alias="DATABASE_URL")
+
+    # Login Google (Fase 2b). Vazio = botão Google não aparece (cai no login
+    # usuário/senha). allowed_domains vazio = qualquer conta Google é aceita;
+    # preencha (ex.: "grupomngt.com.br") para restringir ao domínio da empresa.
+    google_client_id: str = Field("", validation_alias="GOOGLE_CLIENT_ID")
+    google_allowed_domains: str = Field("", validation_alias="GOOGLE_ALLOWED_DOMAINS")
 
     # DataJud (CNJ) — chave PÚBLICA documentada pelo CNJ (igual para todos,
     # https://datajud-wiki.cnj.jus.br/api-publica/acesso). NÃO é segredo; fica
@@ -99,6 +105,9 @@ SECRET_KEY = settings.secret_key
 TOKEN_TTL_SECONDS = settings.token_ttl_seconds
 
 DATABASE_URL = settings.database_url
+
+GOOGLE_CLIENT_ID = settings.google_client_id
+GOOGLE_ALLOWED_DOMAINS = settings.google_allowed_domains
 
 DATAJUD_API_KEY = settings.datajud_api_key
 

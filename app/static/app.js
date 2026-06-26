@@ -48,21 +48,52 @@ async function api(path, opts = {}) {
 }
 
 // ----------------------------- Login --------------------------------------
+async function applyLogin(data) {
+  token = data.token;
+  $("login").classList.add("hidden");
+  $("work").classList.remove("hidden");
+  $("who").textContent = "👤 " + data.user;
+  await loadProfiles();
+  msg("Escolha a cidade e clique em Analisar.", "ok");
+}
+
 $("btn-login").onclick = async () => {
   try {
     const res = await api("/api/auth/login", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: $("user").value, password: $("pass").value }),
     });
-    const data = await res.json();
-    token = data.token;
-    $("login").classList.add("hidden");
-    $("work").classList.remove("hidden");
-    $("who").textContent = "👤 " + data.user;
-    await loadProfiles();
-    msg("Escolha a cidade e clique em Analisar.", "ok");
+    await applyLogin(await res.json());
   } catch (e) { msg("Login falhou: " + e.message, "err"); }
 };
+
+// Login Google (Identity Services). Só inicializa se o backend devolver um
+// client_id (GOOGLE_CLIENT_ID configurado); senão segue só o usuário/senha.
+async function onGoogleCredential(resp) {
+  try {
+    const res = await api("/api/auth/google", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id_token: resp.credential }),
+    });
+    await applyLogin(await res.json());
+  } catch (e) { msg("Login Google falhou: " + e.message, "err"); }
+}
+
+async function initGoogleLogin() {
+  try {
+    const cfg = await (await fetch("/api/auth/config")).json();
+    if (!cfg.google_client_id || !window.google?.accounts?.id) return;
+    google.accounts.id.initialize({
+      client_id: cfg.google_client_id, callback: onGoogleCredential,
+    });
+    google.accounts.id.renderButton($("g-signin"), { theme: "outline", size: "large", width: 240 });
+    $("g-sep").classList.remove("hidden");
+  } catch { /* sem login Google — segue usuário/senha */ }
+}
+
+// O script GSI carrega async; tenta agora e também no load da janela.
+initGoogleLogin();
+window.addEventListener("load", initGoogleLogin);
 
 // --------------------------- Modo (cidade | raio) --------------------------
 function setMode(m) {
