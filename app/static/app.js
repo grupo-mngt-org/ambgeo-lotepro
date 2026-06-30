@@ -40,6 +40,11 @@ async function api(path, opts = {}) {
   opts.headers = Object.assign({}, opts.headers, token ? { Authorization: "Bearer " + token } : {});
   const res = await fetch(path, opts);
   if (!res.ok) {
+    // Token expirado/inválido com a página aberta → encerra a sessão e volta ao login.
+    if (res.status === 401 && token) {
+      logout(true);
+      throw new Error("Sessão expirada. Faça login novamente.");
+    }
     let detail = res.statusText;
     try { detail = (await res.json()).detail || detail; } catch {}
     throw new Error(detail);
@@ -48,21 +53,141 @@ async function api(path, opts = {}) {
 }
 
 // ----------------------------- Login --------------------------------------
-$("btn-login").onclick = async () => {
+async function applyLogin(data) {
+  token = data.token;
+  localStorage.setItem("lotepro_token", data.token);   // persiste p/ sobreviver ao reload (token vale 8h)
+  localStorage.setItem("lotepro_user", data.user || "");
+  $("login").classList.add("hidden");
+  $("work").classList.remove("hidden");
+  $("who").textContent = "👤 " + data.user;
+  $("btn-logout").classList.remove("hidden");
+  await loadProfiles();
+  await loadProjectList();
+  msg("Escolha a cidade e clique em Analisar, ou abra um projeto salvo.", "ok");
+}
+
+// Restaura a sessão a partir do token salvo (reload sem precisar logar de novo).
+async function restoreSession() {
+  const t = localStorage.getItem("lotepro_token");
+  if (!t) return false;
+  token = t;
+  // Valida o token de forma EXPLÍCITA (não via loadProfiles, que engole erros e
+  // mascararia um 401, deixando a UI "logada" com um token inválido).
+  let ok = false;
   try {
-    const res = await api("/api/auth/login", {
+    const res = await fetch("/api/profiles", { headers: { Authorization: "Bearer " + token } });
+    ok = res.ok;
+  } catch { ok = false; }
+  if (!ok) {
+    logout(true);           // token expirado/inválido → cai no login
+    return false;
+  }
+  $("login").classList.add("hidden");
+  $("work").classList.remove("hidden");
+  $("who").textContent = "👤 " + (localStorage.getItem("lotepro_user") || "");
+  $("btn-logout").classList.remove("hidden");
+  await loadProfiles();
+  await loadProjectList();
+  msg("Sessão restaurada.", "ok");
+  return true;
+}
+
+// Mostra a tela de login (usado quando a sessão expira com a página aberta).
+function showLoginScreen() {
+  $("work").classList.add("hidden");
+  $("login").classList.remove("hidden");
+  $("btn-logout").classList.add("hidden");
+  googleRendered = false;   // permite re-renderizar o botão Google
+  initGoogleLogin();
+}
+
+function logout(silent) {
+  token = null;
+  localStorage.removeItem("lotepro_token");
+  localStorage.removeItem("lotepro_user");
+  if (silent) {
+    showLoginScreen();      // expirou no meio do uso → reseta a UI para o login
+  } else {
+    location.reload();
+  }
+}
+
+$("btn-logout").onclick = () => logout(false);
+
+// Lista os projetos salvos (persistidos no banco) para reabrir no mapa.
+async function loadProjectList() {
+  try {
+    const projs = await (await api("/api/projects")).json();
+    const sel = $("saved-projects");
+    if (!projs.length) { $("saved-wrap").classList.add("hidden"); return; }
+    sel.innerHTML = '<option value="">— abrir projeto salvo —</option>' +
+      projs.map((p) => {
+        const n = (p.last_detect && p.last_detect.count) || 0;
+        return `<option value="${p.id}">${p.name} (${n.toLocaleString("pt-BR")} lotes)</option>`;
+      }).join("");
+    $("saved-wrap").classList.remove("hidden");
+  } catch { /* sem lista — segue */ }
+}
+
+async function openSavedProject(pid) {
+  if (!pid) return;
+  $("saved-loading").classList.remove("hidden");
+  $("saved-projects").disabled = true;
+  msg("Abrindo projeto…");
+  try {
+    const data = await (await api(`/api/projects/${pid}/load`)).json();
+    lastProjectId = pid;
+    onAnalysis(data);
+    msg(`Projeto "${data.query}" — ${(data.count || 0).toLocaleString("pt-BR")} lotes.`, "ok");
+  } catch (e) {
+    msg("Falha ao abrir o projeto: " + e.message, "err");
+  } finally {
+    $("saved-loading").classList.add("hidden");
+    $("saved-projects").disabled = false;
+  }
+}
+
+document.addEventListener("change", (e) => {
+  if (e.target && e.target.id === "saved-projects") openSavedProject(e.target.value);
+});
+
+// Login Google (Identity Services) — único meio de acesso.
+async function onGoogleCredential(resp) {
+  try {
+    const res = await api("/api/auth/google", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: $("user").value, password: $("pass").value }),
+      body: JSON.stringify({ id_token: resp.credential }),
     });
-    const data = await res.json();
-    token = data.token;
-    $("login").classList.add("hidden");
-    $("work").classList.remove("hidden");
-    $("who").textContent = "👤 " + data.user;
-    await loadProfiles();
-    msg("Escolha a cidade e clique em Analisar.", "ok");
-  } catch (e) { msg("Login falhou: " + e.message, "err"); }
-};
+    await applyLogin(await res.json());
+  } catch (e) { msg("Login Google falhou: " + e.message, "err"); }
+}
+
+let googleRendered = false;
+async function initGoogleLogin() {
+  if (googleRendered) return;
+  try {
+    const cfg = await (await fetch("/api/auth/config")).json();
+    if (!cfg.google_client_id) {
+      msg("Login Google indisponível (GOOGLE_CLIENT_ID não configurado).", "err");
+      return;
+    }
+    if (!window.google?.accounts?.id) return;  // script GSI ainda carregando — retenta no load
+    google.accounts.id.initialize({
+      client_id: cfg.google_client_id, callback: onGoogleCredential,
+    });
+    google.accounts.id.renderButton($("g-signin"), { theme: "outline", size: "large", width: 240 });
+    googleRendered = true;
+  } catch { msg("Falha ao iniciar o login Google.", "err"); }
+}
+
+// Startup: tenta restaurar a sessão (token salvo); se não houver, mostra o
+// botão Google. O script GSI carrega async, então também tentamos no load.
+async function boot() {
+  if (await restoreSession()) return;   // já logado — dispensa o botão
+  initGoogleLogin();
+}
+boot();
+window.addEventListener("load", () => { if (!token) initGoogleLogin(); });
 
 // --------------------------- Modo (cidade | raio) --------------------------
 function setMode(m) {
@@ -226,6 +351,7 @@ async function pollJob(jobId) {
     const data = j.result;
     lastProjectId = data.project_id;
     onAnalysis(data);
+    loadProjectList();  // o novo projeto passa a aparecer na lista de salvos
     const extra = data.mode === "city"
       ? `${data.area_km2} km² · ${(data.blocks || 0).toLocaleString("pt-BR")} quadras · `
       : "";

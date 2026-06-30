@@ -10,6 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from shapely.geometry import shape
 
+from .. import config
 from ..core import (analysis, auth, bolhas, citywide, enrich, geo, io, jobs,
                     layout, osm, pipeline, registry, report, score, store)
 from ..providers import DetectionParams, get_provider
@@ -21,11 +22,7 @@ VALID_SOURCES = ("auto", "osm", "ms", "overture", "google")
 
 
 # ----------------------------- Auth ---------------------------------------
-class LoginIn(BaseModel):
-    username: str
-    password: str
-
-
+# Login exclusivamente via Google OAuth (ver POST /auth/google).
 def current_user(cred: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> str:
     user = auth.verify_token(cred.credentials) if cred else None
     if not user:
@@ -33,11 +30,26 @@ def current_user(cred: HTTPAuthorizationCredentials | None = Depends(_bearer)) -
     return user
 
 
-@router.post("/auth/login")
-def login(body: LoginIn):
-    if not auth.verify_credentials(body.username, body.password):
-        raise HTTPException(status_code=401, detail="Usuário ou senha inválidos.")
-    return {"token": auth.create_token(body.username), "user": body.username}
+@router.get("/auth/config")
+def auth_config():
+    """Config pública p/ o frontend inicializar o login Google (sem segredos)."""
+    return {"google_client_id": config.GOOGLE_CLIENT_ID}
+
+
+class GoogleLoginIn(BaseModel):
+    id_token: str
+
+
+@router.post("/auth/google")
+def google_login(body: GoogleLoginIn):
+    """Login via Google Identity Services. Recebe o id_token do frontend,
+    valida, faz upsert do usuário e emite o token da aplicação."""
+    try:
+        idinfo = auth.verify_google_token(body.id_token)
+        info = auth.upsert_google_user(idinfo)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    return {"token": auth.create_token(info["email"]), "user": info["name"]}
 
 
 # --------------------------- Projetos -------------------------------------
@@ -502,6 +514,55 @@ def results(pid: str, user: str = Depends(current_user)):
     if gdf is None:
         raise HTTPException(404, "Nenhum resultado. Rode a detecção primeiro.")
     return JSONResponse(io.to_geojson_dict(gdf))
+
+
+_EMPTY_REPORT = {"total": 0, "scenarios": [], "by_zoning": [], "largest": [],
+                 "area_total_m2": 0.0, "area_total_ha": 0.0}
+
+
+@router.get("/projects/{pid}/load")
+def load_project(pid: str, user: str = Depends(current_user)):
+    """Reabre um projeto salvo: devolve o payload no mesmo formato de uma
+    análise (results + report + lots_info + center), para o frontend repintar
+    o mapa sem re-rodar a detecção."""
+    try:
+        meta = store.get_meta(pid)
+    except KeyError:
+        raise HTTPException(404, "Projeto não encontrado.")
+    gdf = store.load_layer(pid, "results")
+    ld = meta.get("last_detect") or {}
+    payload = {
+        "mode": ld.get("mode", "radius"),
+        "project_id": pid,
+        "query": meta.get("name") or pid,
+        "buildings_source": ld.get("source", ""),
+        "profile": ld.get("profile", ""),
+        "count": 0,
+        "results": {"type": "FeatureCollection", "features": []},
+        "report": _EMPTY_REPORT,
+        "lots_info": store.get_lots_info(pid),
+        "center": None,
+        "boundary": None,
+    }
+    if gdf is not None and not gdf.empty:
+        payload["count"] = len(gdf)
+        payload["report"] = report.build_report(gdf)  # usa as geometrias em precisão cheia
+        # Payload com geometrias simplificadas (transporte) — igual ao citywide,
+        # senão um projeto de cidade inteira vira dezenas/centenas de MB.
+        gdf_payload = gdf.copy()
+        gdf_payload["geometry"] = gdf_payload.geometry.simplify(0.00001, preserve_topology=True)
+        payload["results"] = io.to_geojson_dict(gdf_payload)
+        xmin, ymin, xmax, ymax = (float(v) for v in gdf.total_bounds)
+        payload["center"] = {"lat": (ymin + ymax) / 2, "lon": (xmin + xmax) / 2}
+        aoi = store.load_layer(pid, "aoi")  # limite/AOI salvo em arquivo (opcional)
+        if aoi is not None and not aoi.empty:
+            try:
+                aoi_s = aoi.copy()
+                aoi_s["geometry"] = aoi_s.geometry.simplify(0.0001, preserve_topology=True)
+                payload["boundary"] = io.to_geojson_dict(aoi_s[["geometry"]])
+            except Exception:
+                pass
+    return JSONResponse(payload)
 
 
 # --------------------------- Exportação -----------------------------------

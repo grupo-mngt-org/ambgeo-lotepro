@@ -13,6 +13,14 @@ label { display: block; font-size: 12px; color: #52606d; margin-top: 6px; }
 button { background: #2563eb; color: #fff; border: none; cursor: pointer; font-weight: 600; }
 button:hover { background: #1d4ed8; }
 button.exp { background: #475569; }
+#btn-logout { width: auto; margin: 0; padding: 4px 12px; font-size: 12px; background: #475569; }
+#btn-logout:hover { background: #334155; }
+.loading { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600;
+  color: #2563eb; background: #eef4ff; border: 1px solid #c7d7fe; border-radius: 6px;
+  padding: 8px 10px; margin: 6px 0; }
+.spinner { width: 16px; height: 16px; border: 2px solid #c7d7fe; border-top-color: #2563eb;
+  border-radius: 50%; animation: spin .7s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .row { display: flex; gap: 6px; }
 .row > * { flex: 1; }
 .hint { font-size: 11px; color: #7b8794; margin: 4px 0; }
