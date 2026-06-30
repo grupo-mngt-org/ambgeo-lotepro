@@ -40,6 +40,11 @@ async function api(path, opts = {}) {
   opts.headers = Object.assign({}, opts.headers, token ? { Authorization: "Bearer " + token } : {});
   const res = await fetch(path, opts);
   if (!res.ok) {
+    // Token expirado/inválido com a página aberta → encerra a sessão e volta ao login.
+    if (res.status === 401 && token) {
+      logout(true);
+      throw new Error("Sessão expirada. Faça login novamente.");
+    }
     let detail = res.statusText;
     try { detail = (await res.json()).detail || detail; } catch {}
     throw new Error(detail);
@@ -66,26 +71,45 @@ async function restoreSession() {
   const t = localStorage.getItem("lotepro_token");
   if (!t) return false;
   token = t;
+  // Valida o token de forma EXPLÍCITA (não via loadProfiles, que engole erros e
+  // mascararia um 401, deixando a UI "logada" com um token inválido).
+  let ok = false;
   try {
-    await loadProfiles();   // rota protegida: 401 se o token expirou/é inválido
-  } catch {
-    logout(true);           // limpa silenciosamente e cai no login
+    const res = await fetch("/api/profiles", { headers: { Authorization: "Bearer " + token } });
+    ok = res.ok;
+  } catch { ok = false; }
+  if (!ok) {
+    logout(true);           // token expirado/inválido → cai no login
     return false;
   }
   $("login").classList.add("hidden");
   $("work").classList.remove("hidden");
   $("who").textContent = "👤 " + (localStorage.getItem("lotepro_user") || "");
   $("btn-logout").classList.remove("hidden");
+  await loadProfiles();
   await loadProjectList();
   msg("Sessão restaurada.", "ok");
   return true;
+}
+
+// Mostra a tela de login (usado quando a sessão expira com a página aberta).
+function showLoginScreen() {
+  $("work").classList.add("hidden");
+  $("login").classList.remove("hidden");
+  $("btn-logout").classList.add("hidden");
+  googleRendered = false;   // permite re-renderizar o botão Google
+  initGoogleLogin();
 }
 
 function logout(silent) {
   token = null;
   localStorage.removeItem("lotepro_token");
   localStorage.removeItem("lotepro_user");
-  if (!silent) location.reload();
+  if (silent) {
+    showLoginScreen();      // expirou no meio do uso → reseta a UI para o login
+  } else {
+    location.reload();
+  }
 }
 
 $("btn-logout").onclick = () => logout(false);
